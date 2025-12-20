@@ -1,9 +1,9 @@
 import axios from 'axios'
 import type { ApiResponse, LoginRequest, RegisterRequest, LoginResponse, PostListDTO, PostDetailDTO, CreatePost, PatchPost } from '@/types/api'
 
-// 프로덕션: 외부 서버 URL 사용
+// 프로덕션: 외부 서버 URL 사용 (http://211.110.30.142/api)
 // 개발 환경에서는 환경 변수로 localhost:8081 사용 가능
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://211.110.30.142/api'
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -42,6 +42,7 @@ apiClient.interceptors.response.use(
 )
 
 // Auth API
+// baseURL이 'http://211.110.30.142/api'이므로 경로는 '/auth'로 시작
 export const authApi = {
   login: async (data: LoginRequest): Promise<ApiResponse<LoginResponse>> => {
     const response = await apiClient.post<ApiResponse<LoginResponse>>('/auth/login', data)
