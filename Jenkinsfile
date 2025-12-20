@@ -93,12 +93,6 @@ pipeline {
     }
 
 stage('배포') {
-  when {
-    expression {
-      def b = (env.BRANCH_NAME ?: env.GIT_BRANCH ?: '')
-      return b.contains('main') || b.contains('master')
-    }
-  }
   steps {
     bat """
       echo ===== 1) 기존 백엔드(8081) 프로세스 종료 =====
@@ -132,6 +126,7 @@ stage('배포') {
       netstat -ano | findstr :8081
       netstat -ano | findstr :3000
     """
+  }
   }
 }
 
