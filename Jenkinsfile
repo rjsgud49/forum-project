@@ -117,7 +117,8 @@ stage('배포') {
       start "forum-frontend" /B cmd /c ^
         "cd /d ${DEPLOY_FRONT_DIR} && npm install --omit=dev && npm run start -- -p 3000 > logs\\frontend.log 2>&1"
 
-      echo ===== 5) Nginx 설정 테스트 & 리로드 =====
+      echo ===== 5) Nginx 설정 테스트 ^& 리로드 =====
+
       cd /d "${NGINX_HOME}"
       nginx.exe -t
       nginx.exe -s reload
