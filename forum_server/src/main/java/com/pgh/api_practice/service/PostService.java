@@ -1,0 +1,169 @@
+package com.pgh.api_practice.service;
+
+import com.pgh.api_practice.dto.CreatePost;
+import com.pgh.api_practice.dto.PatchPostDTO;
+import com.pgh.api_practice.dto.PostDetailDTO;
+import com.pgh.api_practice.dto.PostListDTO;
+import com.pgh.api_practice.entity.Post;
+import com.pgh.api_practice.entity.Users;
+import com.pgh.api_practice.exception.ApplicationUnauthorizedException;
+import com.pgh.api_practice.exception.ResourceNotFoundException;
+import com.pgh.api_practice.repository.PostRepository;
+import com.pgh.api_practice.repository.UserRepository;
+import lombok.AllArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+
+@Service
+@AllArgsConstructor
+public class PostService {
+
+    private final PostRepository postRepository;
+    private final UserRepository userRepository;
+
+    /** ✅ 게시글 저장 */
+    public long savePost(CreatePost dto) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
+            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        }
+        
+        String username = authentication.getName();
+
+        Users author = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
+
+        Post post = Post.builder()
+                .title(dto.getTitle())
+                .body(dto.getBody())
+                .user(author)
+                .build();
+
+        Post created = postRepository.save(post);
+        return created.getId();
+    }
+
+    /** ✅ 단건 조회 (조회수 증가 포함) */
+    public PostDetailDTO getPostDetail(long id) {
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("게시글을 찾을 수 없습니다."));
+
+        if (post.isDeleted()) {
+            throw new ResourceNotFoundException("삭제된 게시글입니다.");
+        }
+
+        post.setViews(post.getViews() + 1);
+        postRepository.save(post); // 조회수 증가 후 저장
+
+        return PostDetailDTO.builder()
+                .title(post.getTitle())
+                .body(post.getBody())
+                .username(post.getUser().getUsername())
+                .Views(String.valueOf(post.getViews()))
+                .createDateTime(post.getCreatedTime())
+                .updateDateTime(post.getUpdatedTime())
+                .build();
+    }
+
+    /** ✅ 전체 게시글 목록 */
+    public Page<PostListDTO> getPostList(Pageable pageable, String sortType) {
+        Page<Post> posts;
+
+        if ("RESENT".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findAllByIsDeletedFalseOrderByCreatedTimeDesc(pageable);
+        } else if ("HITS".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findAllByIsDeletedFalseOrderByViewsDesc(pageable);
+        } else {
+            posts = postRepository.findAllByIsDeletedFalseOrderByCreatedTimeDesc(pageable);
+        }
+
+        return posts.map(post -> PostListDTO.builder()
+                .id(post.getId())
+                .title(post.getTitle())
+                .username(post.getUser().getUsername())
+                .views(post.getViews())
+                .createDateTime(post.getCreatedTime())
+                .updateDateTime(post.getUpdatedTime())
+                .build());
+    }
+
+    /** ✅ 내 게시글 목록 */
+    public Page<PostListDTO> getMyPostList(Pageable pageable, String sortType) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
+            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        }
+        
+        String requestUsername = authentication.getName();
+
+        Users user = userRepository.findByUsername(requestUsername)
+                .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
+
+        Page<Post> posts;
+
+        if ("RESENT".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findAllByUserIdAndIsDeletedFalseOrderByCreatedTimeDesc(user.getId(), pageable);
+        } else if ("HITS".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findAllByUserIdAndIsDeletedFalseOrderByViewsDesc(user.getId(), pageable);
+        } else {
+            posts = postRepository.findAllByUserIdAndIsDeletedFalseOrderByCreatedTimeDesc(user.getId(), pageable);
+        }
+
+        return posts.map(post -> PostListDTO.builder()
+                .id(post.getId())
+                .title(post.getTitle())
+                .username(post.getUser().getUsername())
+                .views(post.getViews())
+                .createDateTime(post.getCreatedTime())
+                .updateDateTime(post.getUpdatedTime())
+                .build());
+    }
+
+    /** ✅ 게시글 삭제 */
+    public void deletePost(long id) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
+            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        }
+        
+        String requestUserName = authentication.getName();
+
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("게시글을 찾을 수 없습니다."));
+
+        if (!post.getUser().getUsername().equals(requestUserName)) {
+            throw new ApplicationUnauthorizedException("작성자만 게시글을 삭제할 수 있습니다.");
+        }
+
+        post.setDeleted(true);
+        postRepository.save(post);
+    }
+
+    /** ✅ 게시글 수정 */
+    public void updatePost(long id, PatchPostDTO dto) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
+            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        }
+        
+        String requestUserName = authentication.getName();
+
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("게시글을 찾을 수 없습니다."));
+
+        if (post.isDeleted()) {
+            throw new ResourceNotFoundException("삭제된 게시글입니다.");
+        }
+
+        if (!post.getUser().getUsername().equals(requestUserName)) {
+            throw new ApplicationUnauthorizedException("작성자만 게시글을 수정할 수 있습니다.");
+        }
+
+        if (dto.getBody() != null) post.setBody(dto.getBody());
+        if (dto.getTitle() != null) post.setTitle(dto.getTitle());
+
+        postRepository.save(post);
+    }
+}
