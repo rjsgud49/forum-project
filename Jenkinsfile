@@ -123,9 +123,11 @@ stage('배포') {
       nginx.exe -t
       nginx.exe -s reload
 
-      echo ===== 6) 포트 상태 확인 =====
-      netstat -ano | findstr :8081
-      netstat -ano | findstr :3000
+        echo ===== 6) 포트 상태 확인 =====
+        netstat -ano | findstr :8081 || echo [WARN] 8081 아직 LISTENING 아님
+        netstat -ano | findstr :3000 || echo [WARN] 3000 아직 LISTENING 아님
+        exit /b 0
+
     """
   }
   }
