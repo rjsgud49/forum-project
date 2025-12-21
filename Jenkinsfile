@@ -36,24 +36,25 @@ pipeline {
             steps {
                 dir('forum_front') {
                     bat '''
+                        @echo off
                         echo ===== Frontend Build =====
                         node -v
                         npm -v
-
+                        echo.
                         echo Installing dependencies...
-                        call npm ci
-                        if %ERRORLEVEL% NEQ 0 (
+                        npm ci
+                        if errorlevel 1 (
                             echo [ERROR] npm ci failed!
                             exit /b 1
                         )
-
+                        echo.
                         echo Building Next.js application...
-                        call npm run build
-                        if %ERRORLEVEL% NEQ 0 (
+                        npm run build
+                        if errorlevel 1 (
                             echo [ERROR] npm run build failed!
                             exit /b 1
                         )
-
+                        echo.
                         echo Verifying build output...
                         if not exist ".next" (
                             echo [ERROR] .next directory not found after build!
