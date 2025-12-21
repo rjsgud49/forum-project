@@ -32,29 +32,50 @@ pipeline {
         /* =========================
            2. Frontend Build (Next.js)
         ========================= */
-            stage('Frontend Build') {
-                steps {
-                    dir('forum_front') {
-                        bat '''
-                        bat '@echo on'
-                                    bat 'echo ===== Frontend Build ====='
-
-                                    bat 'set NODE_HOME=C:\\Program Files\\nodejs'
-                                    bat 'set PATH=%NODE_HOME%;%PATH%'
-
-                                    bat '"C:\\Program Files\\nodejs\\node.exe" -v'
-                                    bat '"C:\\Program Files\\nodejs\\npm.cmd" -v'
-
-                                    bat 'call "C:\\Program Files\\nodejs\\npm.cmd" ci'
-                                    bat 'call "C:\\Program Files\\nodejs\\npm.cmd" run build'
-
-                                    bat 'dir'
-                                    bat 'dir .next'
-                            echo Frontend build completed successfully
-                        '''
-                    }
+        stage('Frontend Build') {
+            steps {
+                dir('forum_front') {
+                    bat '''
+                        @echo on
+                        echo ===== Frontend Build =====
+                        
+                        REM Node.js 경로 설정
+                        set NODE_HOME=C:\\Program Files\\nodejs
+                        set PATH=%NODE_HOME%;%PATH%
+                        
+                        REM Node.js 및 npm 버전 확인
+                        node -v
+                        npm -v
+                        
+                        REM 의존성 설치
+                        echo Installing dependencies...
+                        call npm ci
+                        if errorlevel 1 (
+                            echo [ERROR] npm ci failed!
+                            exit /b 1
+                        )
+                        
+                        REM Next.js 빌드
+                        echo Building Next.js application...
+                        call npm run build
+                        if errorlevel 1 (
+                            echo [ERROR] npm run build failed!
+                            exit /b 1
+                        )
+                        
+                        REM 빌드 결과 확인
+                        echo Verifying build output...
+                        if not exist ".next" (
+                            echo [ERROR] .next directory not found after build!
+                            dir
+                            exit /b 1
+                        )
+                        
+                        echo Frontend build completed successfully
+                    '''
                 }
             }
+        }
 
 
 
