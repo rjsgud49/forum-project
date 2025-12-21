@@ -69,8 +69,12 @@ pipeline {
         stage('Copy Artifacts') {
             steps {
                 bat '''
-                    echo ===== Copy Artifacts =====
+                    echo ===== Stop Frontend Service =====
+                    "%NSSM%" stop forum-frontend
 
+                    ping 127.0.0.1 -n 5 > nul
+
+                    echo ===== Copy Artifacts =====
                     if not exist "%DEPLOY_BACKEND%"  mkdir "%DEPLOY_BACKEND%"
                     if not exist "%DEPLOY_FRONTEND%" mkdir "%DEPLOY_FRONTEND%"
 
@@ -88,23 +92,19 @@ pipeline {
             }
         }
 
-        /* =========================
-           5. Restart Services (NSSM)
-        ========================= */
         stage('Restart Services (NSSM)') {
             steps {
                 bat '''
-                    echo ===== Restart NSSM Services =====
-
+                    echo ===== Restart Services =====
                     "%NSSM%" restart forum-backend
-                    "%NSSM%" restart forum-frontend
 
-                    REM Jenkins-safe wait
+                    "%NSSM%" start forum-frontend
+
                     ping 127.0.0.1 -n 6 > nul
                 '''
             }
         }
-    }
+
 
     post {
         success {
