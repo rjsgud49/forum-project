@@ -21,7 +21,7 @@ import java.util.*;
 @RequestMapping("/upload")
 public class ImageUploadController {
 
-    @Value("${app.upload.dir:D:/app-data/uploads}")
+    @Value("${app.upload.dir:C:/app-data/uploads}")
     private String uploadDir;
 
     @Value("${app.upload.max-size:10485760}")
