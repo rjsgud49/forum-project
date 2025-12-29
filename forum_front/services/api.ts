@@ -169,3 +169,27 @@ export const commentApi = {
     return response.data
   },
 }
+
+// Image Upload API
+export const imageUploadApi = {
+  uploadImage: async (file: File): Promise<ApiResponse<{ url: string; filename: string; originalFilename: string }>> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await apiClient.post<ApiResponse<{ url: string; filename: string; originalFilename: string }>>(
+      '/upload/image',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    )
+    return response.data
+  },
+
+  deleteImage: async (filename: string): Promise<ApiResponse<void>> => {
+    const response = await apiClient.delete<ApiResponse<void>>(`/upload/image/${filename}`)
+    return response.data
+  },
+}

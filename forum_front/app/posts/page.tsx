@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
 import { postApi } from '@/services/api'
 import Header from '@/components/Header'
+import ImageInsertButton from '@/components/ImageInsertButton'
 
 export default function CreatePostPage() {
   const router = useRouter()
@@ -13,6 +14,7 @@ export default function CreatePostPage() {
   const [formData, setFormData] = useState({ title: '', body: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   if (!isAuthenticated) {
     router.push('/')
@@ -43,6 +45,14 @@ export default function CreatePostPage() {
     })
   }
 
+  const handleImageInserted = (markdown: string) => {
+    // 이미지 마크다운을 본문에 추가
+    setFormData({
+      ...formData,
+      body: formData.body + '\n' + markdown + '\n',
+    })
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <Header onLoginClick={() => router.push('/')} />
@@ -66,10 +76,17 @@ export default function CreatePostPage() {
           </div>
 
           <div>
-            <label htmlFor="body" className="block text-sm font-medium text-gray-700 mb-2">
-              본문 (10자 이상)
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label htmlFor="body" className="block text-sm font-medium text-gray-700">
+                본문 (10자 이상)
+              </label>
+              <ImageInsertButton
+                onImageInserted={handleImageInserted}
+                textareaRef={textareaRef}
+              />
+            </div>
             <textarea
+              ref={textareaRef}
               id="body"
               name="body"
               value={formData.body}
@@ -79,6 +96,9 @@ export default function CreatePostPage() {
               rows={15}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
+            <p className="mt-1 text-xs text-gray-500">
+              이미지 버튼을 클릭하여 이미지를 업로드하고 삽입할 수 있습니다.
+            </p>
           </div>
 
           {error && (

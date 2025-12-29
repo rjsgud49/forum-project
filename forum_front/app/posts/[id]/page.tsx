@@ -45,6 +45,64 @@ export default function PostDetailPage() {
     }
   }
 
+  // 마크다운 이미지 렌더링 (간단한 버전)
+  const renderMarkdown = (text: string): React.ReactNode => {
+    if (!text) return ''
+    
+    // 이미지 마크다운 패턴: ![alt](url)
+    const imagePattern = /!\[([^\]]*)\]\(([^)]+)\)/g
+    const parts: React.ReactNode[] = []
+    let lastIndex = 0
+    let match
+    let keyCounter = 0
+    
+    while ((match = imagePattern.exec(text)) !== null) {
+      // 이미지 앞의 텍스트
+      if (match.index > lastIndex) {
+        const textPart = text.substring(lastIndex, match.index)
+        if (textPart) {
+          parts.push(
+            <span key={`text-${keyCounter++}`} className="whitespace-pre-wrap">
+              {textPart}
+            </span>
+          )
+        }
+      }
+      
+      // 이미지 요소
+      const alt = match[1]
+      const url = match[2]
+      parts.push(
+        <img
+          key={`img-${keyCounter++}`}
+          src={url}
+          alt={alt}
+          className="max-w-full h-auto rounded-lg my-4"
+          onError={(e) => {
+            // 이미지 로드 실패 시 숨김
+            e.currentTarget.style.display = 'none'
+          }}
+        />
+      )
+      
+      lastIndex = match.index + match[0].length
+    }
+    
+    // 남은 텍스트
+    if (lastIndex < text.length) {
+      const remainingText = text.substring(lastIndex)
+      if (remainingText) {
+        parts.push(
+          <span key={`text-${keyCounter++}`} className="whitespace-pre-wrap">
+            {remainingText}
+          </span>
+        )
+      }
+    }
+    
+    return parts.length > 0 ? <>{parts}</> : text
+  }
+
   const formatDate = (dateString: string) => {
     try {
       if (!dateString) return ''
@@ -146,11 +204,11 @@ export default function PostDetailPage() {
                   )}
                 </div>
               </div>
-              <div className="prose max-w-none">
-                <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
-                  {post.body}
-                </div>
+            <div className="prose max-w-none">
+              <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+                {renderMarkdown(post.body)}
               </div>
+            </div>
               <div className="mt-8 pt-8 border-t flex justify-between items-center">
                 <button
                   onClick={() => router.back()}
