@@ -78,4 +78,12 @@ public class FollowController {
         FollowService.UserInfoDTO userInfo = followService.getUserInfoByUsername(username);
         return ResponseEntity.ok(ApiResponse.ok(userInfo, "사용자 정보 조회 성공"));
     }
+    
+    /** ✅ 팔로우 상태 확인 (더 확실한 방법) */
+    // GET http://localhost:8081/follow/check/{userId}
+    @GetMapping("/check/{userId}")
+    public ResponseEntity<ApiResponse<Boolean>> checkFollowStatus(@PathVariable Long userId) {
+        boolean isFollowing = followService.isFollowing(userId);
+        return ResponseEntity.ok(ApiResponse.ok(isFollowing, isFollowing ? "팔로우 중" : "팔로우하지 않음"));
+    }
 }

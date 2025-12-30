@@ -33,6 +33,13 @@ export default function PostDetailPage() {
     }
   }, [params.id])
 
+  // authorInfo가 변경될 때 following 상태 동기화
+  useEffect(() => {
+    if (authorInfo) {
+      setFollowing(authorInfo.isFollowing ?? false)
+    }
+  }, [authorInfo])
+
   const fetchPost = async () => {
     try {
       setLoading(true)
@@ -55,8 +62,30 @@ export default function PostDetailPage() {
     try {
       const response = await followApi.getUserInfo(username)
       if (response.success && response.data) {
-        setAuthorInfo(response.data)
-        setFollowing(response.data.isFollowing)
+        console.log('작성자 정보 응답:', response.data)
+        console.log('isFollowing 값:', response.data.isFollowing)
+        
+        // userId가 있으면 별도로 팔로우 상태를 다시 확인 (이중 확인)
+        let confirmedIsFollowing = response.data.isFollowing ?? false
+        
+        if (response.data.id && isAuthenticated) {
+          try {
+            const statusResponse = await followApi.getFollowStatus(response.data.id)
+            if (statusResponse.success) {
+              console.log('팔로우 상태 재확인 응답:', statusResponse.data)
+              confirmedIsFollowing = statusResponse.data === true
+            }
+          } catch (statusError) {
+            console.error('팔로우 상태 확인 실패:', statusError)
+            // 상태 확인 실패해도 기본값 사용
+          }
+        }
+        
+        setAuthorInfo({
+          ...response.data,
+          isFollowing: confirmedIsFollowing,
+        })
+        setFollowing(confirmedIsFollowing)
       }
     } catch (error) {
       console.error('작성자 정보 조회 실패:', error)
@@ -594,17 +623,17 @@ export default function PostDetailPage() {
                           >
                             팔로잉 {authorInfo.followingCount}
                           </button>
-                          {!isOwner && isAuthenticated && (
+                          {!isOwner && isAuthenticated && authorInfo && (
                             <button
                               onClick={handleFollow}
                               disabled={followLoading}
                               className={`ml-2 px-3 py-1 text-xs rounded-lg transition-colors ${
-                                following
+                                following || authorInfo.isFollowing
                                   ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                   : 'bg-primary text-white hover:bg-secondary'
                               } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
-                              {followLoading ? '처리 중...' : following ? '언팔로우' : '팔로우'}
+                              {followLoading ? '처리 중...' : (following || authorInfo.isFollowing) ? '언팔로우' : '팔로우'}
                             </button>
                           )}
                         </>

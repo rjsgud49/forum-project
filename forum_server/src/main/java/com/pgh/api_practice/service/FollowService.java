@@ -164,7 +164,9 @@ public class FollowService {
             return false;
         }
         
-        return followRepository.existsByFollowerIdAndFollowingId(currentUser.getId(), userId);
+        boolean exists = followRepository.existsByFollowerIdAndFollowingId(currentUser.getId(), userId);
+        System.out.println("팔로우 상태 확인 - 현재 사용자 ID: " + currentUser.getId() + ", 대상 사용자 ID: " + userId + ", 팔로우 여부: " + exists);
+        return exists;
     }
     
     /** ✅ 사용자 정보 조회 (username으로) */
