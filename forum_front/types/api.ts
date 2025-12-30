@@ -96,7 +96,31 @@ export interface UserInfoDTO {
   username: string
   nickname: string
   email: string
+  profileImageUrl?: string
+  githubLink?: string
   followerCount: number
   followingCount: number
   isFollowing: boolean
+}
+
+export interface User {
+  id: number
+  username: string
+  nickname: string
+  email: string
+  profileImageUrl?: string
+  githubLink?: string
+  isDeleted: boolean
+  createdDate: string
+}
+
+export interface UpdateProfile {
+  profileImageUrl?: string
+  email?: string
+  githubLink?: string
+}
+
+export interface ChangePassword {
+  currentPassword: string
+  newPassword: string
 }

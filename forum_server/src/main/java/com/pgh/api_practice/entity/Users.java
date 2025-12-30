@@ -37,8 +37,11 @@
         @Column(name = "is_deleted", nullable = false)
         private boolean isDeleted = false;
 
+        @Column(name = "profile_image_url", length = 500)
+        private String profileImageUrl;
 
-
+        @Column(name = "github_link", length = 500)
+        private String githubLink;
 
         @CreatedDate
         @Column(name = "created_datetime", nullable = false, updatable = false)

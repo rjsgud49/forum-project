@@ -156,6 +156,25 @@ apiClient.interceptors.response.use(
 
 // Auth API
 export const authApi = {
+  getCurrentUser: async (): Promise<ApiResponse<import('@/types/api').User>> => {
+    const response = await apiClient.get<ApiResponse<import('@/types/api').User>>('/auth/me')
+    return response.data
+  },
+
+  updateProfile: async (data: import('@/types/api').UpdateProfile): Promise<ApiResponse<void>> => {
+    const response = await apiClient.patch<ApiResponse<void>>('/auth/profile', data)
+    return response.data
+  },
+
+  changePassword: async (data: import('@/types/api').ChangePassword): Promise<ApiResponse<void>> => {
+    const response = await apiClient.patch<ApiResponse<void>>('/auth/password', data)
+    return response.data
+  },
+
+  deleteAccount: async (): Promise<ApiResponse<void>> => {
+    const response = await apiClient.delete<ApiResponse<void>>('/auth/account')
+    return response.data
+  },
   login: (data: LoginRequest) =>
     apiClient.post<ApiResponse<LoginResponse>>('/auth/login', data).then(r => r.data),
 
@@ -351,6 +370,22 @@ export const imageUploadApi = {
 
   deleteImage: async (filename: string): Promise<ApiResponse<void>> => {
     const response = await apiClient.delete<ApiResponse<void>>(`/upload/image/${filename}`)
+    return response.data
+  },
+}
+
+// User Post API
+export const userPostApi = {
+  getUserPostList: async (username: string, page: number = 0, size: number = 10, sortType: string = 'RESENT'): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
+    const response = await apiClient.get<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>>(
+      `/post/user/${encodeURIComponent(username)}`,
+      { params: { page, size, sortType } }
+    )
+    return response.data
+  },
+
+  getUserPostCount: async (username: string): Promise<ApiResponse<number>> => {
+    const response = await apiClient.get<ApiResponse<number>>(`/post/user/${encodeURIComponent(username)}/count`)
     return response.data
   },
 }

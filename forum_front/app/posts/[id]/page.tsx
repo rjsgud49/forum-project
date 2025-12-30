@@ -70,28 +70,34 @@ export default function PostDetailPage() {
     if (!authorInfo) return
 
     setFollowLoading(true)
+    const previousFollowing = following // 이전 상태 저장
+    
+    // 낙관적 업데이트: 즉시 UI 업데이트
+    setFollowing(!following)
+    
     try {
-      if (following) {
+      if (previousFollowing) {
         const response = await followApi.unfollowUser(authorInfo.id)
-        if (response.success) {
-          setFollowing(false)
-          // 작성자 정보 다시 조회하여 팔로워 수 업데이트
-          if (post?.username) {
-            fetchAuthorInfo(post.username)
-          }
+        if (!response.success) {
+          // 실패 시 이전 상태로 복원
+          setFollowing(previousFollowing)
+          throw new Error(response.message || '언팔로우에 실패했습니다.')
         }
       } else {
         const response = await followApi.followUser(authorInfo.id)
-        if (response.success) {
-          setFollowing(true)
-          // 작성자 정보 다시 조회하여 팔로워 수 업데이트
-          if (post?.username) {
-            fetchAuthorInfo(post.username)
-          }
+        if (!response.success) {
+          // 실패 시 이전 상태로 복원
+          setFollowing(previousFollowing)
+          throw new Error(response.message || '팔로우에 실패했습니다.')
         }
       }
+      
+      // 성공 시 작성자 정보 다시 조회하여 팔로워 수 업데이트
+      if (post?.username) {
+        fetchAuthorInfo(post.username)
+      }
     } catch (error: any) {
-      alert(error.response?.data?.message || '팔로우 처리에 실패했습니다.')
+      alert(error.response?.data?.message || error.message || '팔로우 처리에 실패했습니다.')
       console.error('팔로우 처리 실패:', error)
     } finally {
       setFollowLoading(false)

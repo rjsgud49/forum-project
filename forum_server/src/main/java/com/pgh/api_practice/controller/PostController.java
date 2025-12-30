@@ -111,4 +111,24 @@ public class PostController {
         List<String> tags = postService.getMyTags();
         return ResponseEntity.ok(ApiResponse.ok(tags, "내 태그 조회 성공"));
     }
+    
+    /** ✅ 특정 사용자의 게시글 목록 조회 */
+    // GET http://localhost:8081/post/user/{username}?sortType=RESENT
+    @GetMapping("/user/{username}")
+    public ResponseEntity<ApiResponse<Page<PostListDTO>>> getUserPostList(
+            @PathVariable String username,
+            Pageable pageable,
+            @RequestParam(defaultValue = "RESENT") String sortType
+    ) {
+        Page<PostListDTO> list = postService.getUserPostList(username, pageable, sortType);
+        return ResponseEntity.ok(ApiResponse.ok(list, "사용자 게시글 조회 성공"));
+    }
+    
+    /** ✅ 특정 사용자의 게시글 수 조회 */
+    // GET http://localhost:8081/post/user/{username}/count
+    @GetMapping("/user/{username}/count")
+    public ResponseEntity<ApiResponse<Long>> getUserPostCount(@PathVariable String username) {
+        long count = postService.getUserPostCount(username);
+        return ResponseEntity.ok(ApiResponse.ok(count, "게시글 수 조회 성공"));
+    }
 }

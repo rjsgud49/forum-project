@@ -1,12 +1,15 @@
 package com.pgh.api_practice.service;
 
 
+import com.pgh.api_practice.dto.ChangePasswordDTO;
 import com.pgh.api_practice.dto.LoginRequestDTO;
+import com.pgh.api_practice.dto.UpdateProfileDTO;
 import com.pgh.api_practice.dto.auth.LoginResponseDTO;
 import com.pgh.api_practice.dto.auth.RefreshTokenRequestDTO;
 import com.pgh.api_practice.dto.auth.RegisterRequestDTO;
 import com.pgh.api_practice.entity.RefreshToken;
 import com.pgh.api_practice.entity.Users;
+import com.pgh.api_practice.exception.ApplicationUnauthorizedException;
 import com.pgh.api_practice.exception.RefreshTokenExpiredException;
 import com.pgh.api_practice.exception.ResourceNotFoundException;
 import com.pgh.api_practice.exception.UserAlreadyExistException;
@@ -17,6 +20,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -73,8 +77,8 @@ public class AuthService {
         String accessToken  = tokenProvider.createAccessToken(username);
         String refreshToken = tokenProvider.createRefreshToken(username);
 
-        // 3) 사용자 엔티티 로드
-        Users user = authRepository.findByUsername(username)
+        // 3) 사용자 존재 확인
+        authRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
 
         // 5) 신규 RT 저장
@@ -124,6 +128,76 @@ public class AuthService {
         refreshTokenRepository.save(newRefreshTokenEntity);
 
         return new LoginResponseDTO(newAccessToken, newRefreshToken);
+    }
+
+    /** ✅ 현재 사용자 정보 조회 */
+    @Transactional(readOnly = true)
+    public Users getCurrentUser() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
+            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        }
+        
+        String username = authentication.getName();
+        return authRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
+    }
+
+    /** ✅ 프로필 정보 수정 */
+    @Transactional
+    public void updateProfile(UpdateProfileDTO dto) {
+        Users user = getCurrentUser();
+        
+        boolean modified = false;
+        
+        if (dto.getProfileImageUrl() != null && !dto.getProfileImageUrl().equals(user.getProfileImageUrl())) {
+            user.setProfileImageUrl(dto.getProfileImageUrl());
+            modified = true;
+        }
+        
+        if (dto.getEmail() != null && !dto.getEmail().equals(user.getEmail())) {
+            // 이메일 중복 확인
+            if (authRepository.existsByEmail(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())) {
+                throw new UserAlreadyExistException("이미 사용 중인 이메일입니다.");
+            }
+            user.setEmail(dto.getEmail());
+            modified = true;
+        }
+        
+        if (dto.getGithubLink() != null && !dto.getGithubLink().equals(user.getGithubLink())) {
+            user.setGithubLink(dto.getGithubLink());
+            modified = true;
+        }
+        
+        if (modified) {
+            authRepository.save(user);
+        }
+    }
+
+    /** ✅ 비밀번호 변경 */
+    @Transactional
+    public void changePassword(ChangePasswordDTO dto) {
+        Users user = getCurrentUser();
+        
+        // 현재 비밀번호 확인
+        if (!passwordEncoder.matches(dto.getCurrentPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("현재 비밀번호가 일치하지 않습니다.");
+        }
+        
+        // 새 비밀번호 설정
+        user.setPassword(passwordEncoder.encode(dto.getNewPassword()));
+        authRepository.save(user);
+    }
+
+    /** ✅ 회원탈퇴 */
+    @Transactional
+    public void deleteAccount() {
+        Users user = getCurrentUser();
+        user.setDeleted(true);
+        authRepository.save(user);
+        
+        // 모든 리프레시 토큰 삭제
+        // (선택적 - 보안을 위해)
     }
 
 }

@@ -118,6 +118,8 @@ public class FollowService {
                         .username(follower.getUsername())
                         .nickname(follower.getNickname())
                         .email(follower.getEmail())
+                        .profileImageUrl(follower.getProfileImageUrl())
+                        .githubLink(follower.getGithubLink())
                         .followerCount(followRepository.countByFollowingId(follower.getId()))
                         .followingCount(followRepository.countByFollowerId(follower.getId()))
                         .isFollowing(checkIfCurrentUserIsFollowing(follower.getId()))
@@ -140,6 +142,8 @@ public class FollowService {
                         .username(followingUser.getUsername())
                         .nickname(followingUser.getNickname())
                         .email(followingUser.getEmail())
+                        .profileImageUrl(followingUser.getProfileImageUrl())
+                        .githubLink(followingUser.getGithubLink())
                         .followerCount(followRepository.countByFollowingId(followingUser.getId()))
                         .followingCount(followRepository.countByFollowerId(followingUser.getId()))
                         .isFollowing(true) // 팔로잉 목록이므로 항상 true
@@ -178,6 +182,8 @@ public class FollowService {
                 .username(user.getUsername())
                 .nickname(user.getNickname())
                 .email(user.getEmail())
+                .profileImageUrl(user.getProfileImageUrl())
+                .githubLink(user.getGithubLink())
                 .followerCount(followerCount)
                 .followingCount(followingCount)
                 .isFollowing(isFollowing)
@@ -195,6 +201,8 @@ public class FollowService {
         private String username;
         private String nickname;
         private String email;
+        private String profileImageUrl;
+        private String githubLink;
         private long followerCount;
         private long followingCount;
         private boolean isFollowing;

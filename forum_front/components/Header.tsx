@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useSelector, useDispatch } from 'react-redux'
 import type { RootState } from '@/store/store'
 import { logout } from '@/store/slices/authSlice'
 import { useRouter } from 'next/navigation'
 import { getUsernameFromToken } from '@/utils/jwt'
+import { authApi } from '@/services/api'
+import type { User } from '@/types/api'
 
 interface HeaderProps {
   onLoginClick: () => void
@@ -15,6 +18,9 @@ interface HeaderProps {
 export default function Header({ onLoginClick }: HeaderProps) {
   const [mounted, setMounted] = useState(false)
   const [username, setUsername] = useState<string | null>(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [showDropdown, setShowDropdown] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
   const dispatch = useDispatch()
   const router = useRouter()
@@ -23,9 +29,39 @@ export default function Header({ onLoginClick }: HeaderProps) {
   useEffect(() => {
     setMounted(true)
     if (isAuthenticated) {
-      setUsername(getUsernameFromToken())
+      const currentUsername = getUsernameFromToken()
+      setUsername(currentUsername)
+      fetchUserInfo()
     }
   }, [isAuthenticated])
+
+  const fetchUserInfo = async () => {
+    try {
+      const response = await authApi.getCurrentUser()
+      if (response.success && response.data) {
+        setUser(response.data)
+      }
+    } catch (error) {
+      console.error('사용자 정보 조회 실패:', error)
+    }
+  }
+
+  // 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false)
+      }
+    }
+
+    if (showDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showDropdown])
 
   const handleLogout = useCallback(() => {
     // Redux 상태에서 로그아웃 처리 (토큰 제거 포함)
@@ -83,6 +119,13 @@ export default function Header({ onLoginClick }: HeaderProps) {
                     >
                       내 게시글
                     </Link>
+                    <Link
+                      href="/social"
+                      className="text-gray-700 hover:text-primary transition-colors"
+                      prefetch={true}
+                    >
+                      소셜
+                    </Link>
                   </>
                 ) : (
                   <>
@@ -107,18 +150,52 @@ export default function Header({ onLoginClick }: HeaderProps) {
                   </>
                 )}
             {mounted && isAuthenticated ? (
-              <>
-                
-                <span className="text-gray-700 font-medium">
-                  {username || '사용자'}님 환영합니다.
-                </span>
+              <div className="relative" ref={dropdownRef}>
                 <button
-                  onClick={handleLogout}
-                  className="px-4 py-2 text-gray-700 hover:text-primary transition-colors"
+                  onClick={() => setShowDropdown(!showDropdown)}
+                  className="flex items-center focus:outline-none"
                 >
-                  로그아웃
+                  {user?.profileImageUrl ? (
+                    <Image
+                      src={user.profileImageUrl.startsWith('http') 
+                        ? user.profileImageUrl 
+                        : `${process.env.NEXT_PUBLIC_UPLOAD_BASE_URL || ''}${user.profileImageUrl}`}
+                      alt="프로필"
+                      width={40}
+                      height={40}
+                      className="rounded-full object-cover border-2 border-gray-200 hover:border-primary transition-colors"
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center border-2 border-gray-200 hover:border-primary transition-colors">
+                      <span className="text-gray-600 font-medium text-sm">
+                        {username?.charAt(0).toUpperCase() || 'U'}
+                      </span>
+                    </div>
+                  )}
                 </button>
-              </>
+                
+                {showDropdown && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                    <Link
+                      href="/settings"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => setShowDropdown(false)}
+                    >
+                      설정
+                    </Link>
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false)
+                        handleLogout()
+                      }}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      로그아웃
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <button
                 onClick={onLoginClick}

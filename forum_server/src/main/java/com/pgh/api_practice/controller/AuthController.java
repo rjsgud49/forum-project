@@ -1,9 +1,12 @@
 package com.pgh.api_practice.controller;
 
+import com.pgh.api_practice.dto.ChangePasswordDTO;
 import com.pgh.api_practice.dto.LoginRequestDTO;
+import com.pgh.api_practice.dto.UpdateProfileDTO;
 import com.pgh.api_practice.dto.auth.RegisterRequestDTO;
 import com.pgh.api_practice.dto.auth.LoginResponseDTO;
 import com.pgh.api_practice.dto.auth.RefreshTokenRequestDTO;
+import com.pgh.api_practice.entity.Users;
 import com.pgh.api_practice.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +43,34 @@ public class AuthController {
     ) {
         LoginResponseDTO result = authService.refreshToken(refreshTokenRequestDTO);
         return ResponseEntity.ok(ApiResponse.ok(result, "토큰이 재발급되었습니다."));
+    }
+    
+    /** ✅ 현재 사용자 정보 조회 */
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<Users>> getCurrentUser() {
+        Users user = authService.getCurrentUser();
+        return ResponseEntity.ok(ApiResponse.ok(user, "사용자 정보 조회 성공"));
+    }
+    
+    /** ✅ 프로필 정보 수정 */
+    @PatchMapping("/profile")
+    public ResponseEntity<ApiResponse<Void>> updateProfile(@RequestBody UpdateProfileDTO dto) {
+        authService.updateProfile(dto);
+        return ResponseEntity.ok(ApiResponse.ok("프로필 수정 성공"));
+    }
+    
+    /** ✅ 비밀번호 변경 */
+    @PatchMapping("/password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(@Valid @RequestBody ChangePasswordDTO dto) {
+        authService.changePassword(dto);
+        return ResponseEntity.ok(ApiResponse.ok("비밀번호 변경 성공"));
+    }
+    
+    /** ✅ 회원탈퇴 */
+    @DeleteMapping("/account")
+    public ResponseEntity<ApiResponse<Void>> deleteAccount() {
+        authService.deleteAccount();
+        return ResponseEntity.ok(ApiResponse.ok("회원탈퇴 성공"));
     }
 }
 
