@@ -7,6 +7,7 @@ import type { RootState } from '@/store/store'
 import { postApi, imageUploadApi } from '@/services/api'
 import Header from '@/components/Header'
 import ImageInsertButton from '@/components/ImageInsertButton'
+import ImageCropModal from '@/components/ImageCropModal'
 import Image from 'next/image'
 
 export default function CreatePostPage() {
@@ -15,6 +16,8 @@ export default function CreatePostPage() {
   const [formData, setFormData] = useState({ title: '', body: '', profileImageUrl: '' })
   const [profileImagePreview, setProfileImagePreview] = useState<string>('')
   const [uploadingProfile, setUploadingProfile] = useState(false)
+  const [showCropModal, setShowCropModal] = useState(false)
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -31,12 +34,15 @@ export default function CreatePostPage() {
     setLoading(true)
 
     try {
+      // 프로필 이미지 URL이 있는지 확인
+      console.log('제출할 데이터:', formData)
       const response = await postApi.createPost(formData)
       if (response.success) {
         router.push('/')
       }
     } catch (err: any) {
       setError(err.response?.data?.message || '게시글 작성에 실패했습니다.')
+      console.error('게시글 작성 실패:', err)
     } finally {
       setLoading(false)
     }
@@ -57,7 +63,7 @@ export default function CreatePostPage() {
     })
   }
 
-  const handleProfileImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -73,9 +79,27 @@ export default function CreatePostPage() {
       return
     }
 
+    // 파일을 선택하고 크롭 모달 열기
+    setSelectedImageFile(file)
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        setProfileImagePreview(e.target.result as string)
+        setShowCropModal(true)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
     try {
       setUploadingProfile(true)
-      const response = await imageUploadApi.uploadImage(file)
+      
+      // Blob을 File로 변환
+      const croppedFile = new File([croppedBlob], 'cropped-image.jpg', { type: 'image/jpeg' })
+      
+      // 크롭된 이미지 업로드
+      const response = await imageUploadApi.uploadImage(croppedFile)
       
       if (response.success && response.data) {
         const imageUrl = response.data.url
@@ -238,6 +262,21 @@ export default function CreatePostPage() {
             </button>
           </div>
         </form>
+
+        {/* 이미지 크롭 모달 */}
+        {showCropModal && profileImagePreview && (
+          <ImageCropModal
+            isOpen={showCropModal}
+            imageSrc={profileImagePreview}
+            onClose={() => {
+              setShowCropModal(false)
+              setProfileImagePreview('')
+              setSelectedImageFile(null)
+            }}
+            onCrop={handleCropComplete}
+            aspectRatio={1}
+          />
+        )}
       </div>
     </div>
   )

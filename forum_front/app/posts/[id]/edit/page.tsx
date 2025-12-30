@@ -9,6 +9,7 @@ import type { PostDetailDTO } from '@/types/api'
 import Header from '@/components/Header'
 import ImageInsertButton from '@/components/ImageInsertButton'
 import ResizableImage from '@/components/ResizableImage'
+import ImageCropModal from '@/components/ImageCropModal'
 import { getUsernameFromToken } from '@/utils/jwt'
 import Image from 'next/image'
 
@@ -20,6 +21,8 @@ export default function EditPostPage() {
   const [formData, setFormData] = useState({ title: '', body: '', profileImageUrl: '' })
   const [profileImagePreview, setProfileImagePreview] = useState<string>('')
   const [uploadingProfile, setUploadingProfile] = useState(false)
+  const [showCropModal, setShowCropModal] = useState(false)
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -126,7 +129,7 @@ export default function EditPostPage() {
     })
   }
 
-  const handleProfileImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -142,9 +145,27 @@ export default function EditPostPage() {
       return
     }
 
+    // 파일을 선택하고 크롭 모달 열기
+    setSelectedImageFile(file)
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        setProfileImagePreview(e.target.result as string)
+        setShowCropModal(true)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
     try {
       setUploadingProfile(true)
-      const response = await imageUploadApi.uploadImage(file)
+      
+      // Blob을 File로 변환
+      const croppedFile = new File([croppedBlob], 'cropped-image.jpg', { type: 'image/jpeg' })
+      
+      // 크롭된 이미지 업로드
+      const response = await imageUploadApi.uploadImage(croppedFile)
       
       if (response.success && response.data) {
         const imageUrl = response.data.url
@@ -424,6 +445,23 @@ export default function EditPostPage() {
             </button>
           </div>
         </form>
+
+        {/* 이미지 크롭 모달 */}
+        {showCropModal && profileImagePreview && (
+          <ImageCropModal
+            isOpen={showCropModal}
+            imageSrc={profileImagePreview}
+            onClose={() => {
+              setShowCropModal(false)
+              if (!formData.profileImageUrl) {
+                setProfileImagePreview('')
+              }
+              setSelectedImageFile(null)
+            }}
+            onCrop={handleCropComplete}
+            aspectRatio={1}
+          />
+        )}
       </div>
     </div>
   )
