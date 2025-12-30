@@ -189,7 +189,7 @@ function UserProfileContent() {
                 unoptimized
               />
             ) : (
-              <div className="w-30 h-30 rounded-full bg-gray-300 flex items-center justify-center border-4 border-gray-200">
+              <div className="w-[120px] h-[120px] rounded-full bg-gray-300 flex items-center justify-center border-4 border-gray-200 flex-shrink-0">
                 <span className="text-gray-600 font-medium text-4xl">
                   {userInfo.username?.charAt(0).toUpperCase() || 'U'}
                 </span>
@@ -230,12 +230,12 @@ function UserProfileContent() {
                   onClick={handleFollow}
                   disabled={followLoading}
                   className={`mt-4 px-6 py-2 rounded-lg transition-colors ${
-                    following
+                    userInfo.isFollowing
                       ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       : 'bg-primary text-white hover:bg-secondary'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  {followLoading ? '처리 중...' : following ? '언팔로우' : '팔로우'}
+                  {followLoading ? '처리 중...' : userInfo.isFollowing ? '언팔로우' : '팔로우'}
                 </button>
               )}
               {isOwnProfile && (

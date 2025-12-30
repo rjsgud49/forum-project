@@ -119,13 +119,6 @@ export default function Header({ onLoginClick }: HeaderProps) {
                     >
                       내 게시글
                     </Link>
-                    <Link
-                      href="/social"
-                      className="text-gray-700 hover:text-primary transition-colors"
-                      prefetch={true}
-                    >
-                      소셜
-                    </Link>
                   </>
                 ) : (
                   <>
@@ -183,6 +176,13 @@ export default function Header({ onLoginClick }: HeaderProps) {
                       onClick={() => setShowDropdown(false)}
                     >
                       설정
+                    </Link>
+                     <Link
+                      href="/social"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      prefetch={true}
+                    >
+                      소셜
                     </Link>
                     <button
                       onClick={() => {

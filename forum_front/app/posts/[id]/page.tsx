@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
 import { postApi, followApi } from '@/services/api'
@@ -552,7 +553,12 @@ export default function PostDetailPage() {
                 <div className="flex items-center justify-between text-sm text-gray-500 mb-8 pb-4 border-b">
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center space-x-2">
-                      <span className="font-medium">{post.username}</span>
+                      <Link
+                        href={`/users/${post.username}`}
+                        className="font-medium text-gray-700 hover:text-primary transition-colors cursor-pointer"
+                      >
+                        {post.username}
+                      </Link>
                       {authorInfo && (
                         <>
                           <span className="text-gray-400">•</span>
@@ -573,12 +579,12 @@ export default function PostDetailPage() {
                               onClick={handleFollow}
                               disabled={followLoading}
                               className={`ml-2 px-3 py-1 text-xs rounded-lg transition-colors ${
-                                following
+                                authorInfo?.isFollowing
                                   ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                   : 'bg-primary text-white hover:bg-secondary'
                               } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
-                              {followLoading ? '처리 중...' : following ? '언팔로우' : '팔로우'}
+                              {followLoading ? '처리 중...' : authorInfo?.isFollowing ? '언팔로우' : '팔로우'}
                             </button>
                           )}
                         </>
