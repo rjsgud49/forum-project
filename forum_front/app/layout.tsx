@@ -6,8 +6,12 @@ import ReduxProvider from '@/components/ReduxProvider'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: '게시판',
+  title: 'rjsgud\'s forum',
   description: '게시판 서비스',
+  icons: {
+    icon: '/asset/logo.png',
+    apple: '/asset/logo.png',
+  },
 }
 
 export default function RootLayout({
