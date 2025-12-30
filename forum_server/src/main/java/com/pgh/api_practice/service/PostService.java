@@ -42,6 +42,7 @@ public class PostService {
                 .title(dto.getTitle())
                 .body(dto.getBody())
                 .user(author)
+                .profileImageUrl(dto.getProfileImageUrl())
                 .build();
 
         Post created = postRepository.save(post);
@@ -79,6 +80,7 @@ public class PostService {
                 .Views(String.valueOf(post.getViews()))
                 .createDateTime(post.getCreatedTime())
                 .updateDateTime(updateTime)
+                .profileImageUrl(post.getProfileImageUrl())
                 .build();
     }
 
@@ -110,6 +112,7 @@ public class PostService {
                     .views(post.getViews())
                     .createDateTime(post.getCreatedTime())
                     .updateDateTime(updateTime)
+                    .profileImageUrl(post.getProfileImageUrl())
                     .build();
         });
     }
@@ -152,6 +155,7 @@ public class PostService {
                     .views(post.getViews())
                     .createDateTime(post.getCreatedTime())
                     .updateDateTime(updateTime)
+                    .profileImageUrl(post.getProfileImageUrl())
                     .build();
         });
     }
@@ -205,6 +209,10 @@ public class PostService {
         }
         if (dto.getTitle() != null && !dto.getTitle().equals(post.getTitle())) {
             post.setTitle(dto.getTitle());
+            isModified = true;
+        }
+        if (dto.getProfileImageUrl() != null && !dto.getProfileImageUrl().equals(post.getProfileImageUrl())) {
+            post.setProfileImageUrl(dto.getProfileImageUrl());
             isModified = true;
         }
 

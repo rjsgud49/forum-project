@@ -40,6 +40,8 @@ public class Post {
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
+    @Column(name = "profile_image_url", length = 500)
+    private String profileImageUrl;
 
     @Column(name = "create_datetime")
     @CreatedDate

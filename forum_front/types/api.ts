@@ -29,6 +29,7 @@ export interface PostListDTO {
   Views?: number  // 백엔드에서 대문자로 올 수 있음 (대체)
   createDateTime: string
   updateDateTime: string
+  profileImageUrl?: string  // 게시물 프로필 이미지 URL
 }
 
 export interface PostDetailDTO {
@@ -44,11 +45,13 @@ export interface PostDetailDTO {
 export interface CreatePost {
   title: string
   body: string
+  profileImageUrl?: string
 }
 
 export interface PatchPost {
   title?: string
   body?: string
+  profileImageUrl?: string
 }
 
 export interface CommentDTO {

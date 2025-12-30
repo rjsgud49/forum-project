@@ -12,5 +12,5 @@ import lombok.Builder;
 public class PatchPostDTO {
     private String title;
     private String body;
-
+    private String profileImageUrl;  // 게시물 프로필 이미지 URL
 }

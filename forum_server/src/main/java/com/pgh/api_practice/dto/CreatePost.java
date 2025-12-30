@@ -13,4 +13,6 @@ public class CreatePost {
 
     @Size(min = 10, message = "본문은 10자 이상이어야 합니다.")
     private String body;//7자 이상
+
+    private String profileImageUrl;  // 게시물 프로필 이미지 URL
 }

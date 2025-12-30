@@ -17,4 +17,5 @@ public class PostDetailDTO  {
     private String Views;
     private LocalDateTime createDateTime;
     private LocalDateTime updateDateTime;
+    private String profileImageUrl;
 }

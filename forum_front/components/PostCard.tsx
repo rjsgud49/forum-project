@@ -1,15 +1,35 @@
-import { memo } from 'react'
+'use client'
+
+import { memo, useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import type { PostListDTO } from '@/types/api'
 // date-fns에서 필요한 함수만 임포트 (트리 쉐이킹)
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
+import { generateDefaultPostImage } from '@/utils/defaultPostImage'
 
 interface PostCardProps {
   post: PostListDTO
 }
 
 function PostCard({ post }: PostCardProps) {
+  const [defaultImageUrl, setDefaultImageUrl] = useState<string>('')
+  const [imageError, setImageError] = useState(false)
+
+  useEffect(() => {
+    // 기본 이미지 생성
+    const url = generateDefaultPostImage(post.id)
+    setDefaultImageUrl(url)
+    
+    // 클린업
+    return () => {
+      if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url)
+      }
+    }
+  }, [post.id])
+
   const formatDate = (dateString: string) => {
     try {
       return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: ko })
@@ -18,21 +38,56 @@ function PostCard({ post }: PostCardProps) {
     }
   }
 
+  const getImageUrl = () => {
+    if (post.profileImageUrl && !imageError) {
+      // 프로필 이미지가 있고 에러가 없으면 프로필 이미지 사용
+      const baseUrl = process.env.NEXT_PUBLIC_UPLOAD_BASE_URL || ''
+      const imageUrl = post.profileImageUrl.startsWith('http') 
+        ? post.profileImageUrl 
+        : `${baseUrl}${post.profileImageUrl}`
+      return imageUrl
+    }
+    // 기본 이미지 사용
+    return defaultImageUrl
+  }
+
   return (
     <Link
       href={`/posts/${post.id}`}
       prefetch={true}
-      className="block p-6 bg-white border border-gray-200 rounded-lg hover:border-primary hover:shadow-md transition-all"
+      className="block bg-white border border-gray-200 rounded-lg hover:border-primary hover:shadow-lg transition-all overflow-hidden"
     >
-      <h3 className="text-xl font-semibold text-gray-900 mb-2 line-clamp-2">
-        {post.title}
-      </h3>
-      <div className="flex items-center justify-between text-sm text-gray-500">
-        <div className="flex items-center space-x-4">
-          <span>{post.username}</span>
-          <span>조회수: {(post.views ?? post.Views) ?? 0}</span>
+      {/* 이미지 영역 */}
+      <div className="relative w-full h-48 bg-gray-100 overflow-hidden">
+        {defaultImageUrl && (
+          <Image
+            src={getImageUrl()}
+            alt={post.title}
+            fill
+            className="object-cover"
+            onError={() => setImageError(true)}
+            unoptimized={getImageUrl().startsWith('blob:')}
+          />
+        )}
+        {/* 오버레이 그라데이션 */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+        {/* 제목 오버레이 */}
+        <div className="absolute bottom-0 left-0 right-0 p-4">
+          <h3 className="text-white font-semibold text-lg line-clamp-2 drop-shadow-lg">
+            {post.title}
+          </h3>
         </div>
-        <span>{formatDate(post.createDateTime)}</span>
+      </div>
+      
+      {/* 카드 하단 정보 */}
+      <div className="p-4">
+        <div className="flex items-center justify-between text-sm text-gray-600">
+          <div className="flex items-center space-x-4">
+            <span className="font-medium">{post.username}</span>
+            <span className="text-gray-500">조회수: {(post.views ?? post.Views) ?? 0}</span>
+          </div>
+          <span className="text-gray-500">{formatDate(post.createDateTime)}</span>
+        </div>
       </div>
     </Link>
   )
