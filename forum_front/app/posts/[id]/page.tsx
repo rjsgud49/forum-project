@@ -8,6 +8,7 @@ import { postApi } from '@/services/api'
 import type { PostDetailDTO } from '@/types/api'
 import Header from '@/components/Header'
 import CommentList from '@/components/CommentList'
+import LoginModal from '@/components/LoginModal'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { getUsernameFromToken } from '@/utils/jwt'
@@ -19,6 +20,7 @@ export default function PostDetailPage() {
   const [post, setPost] = useState<PostDetailDTO | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(false)
 
   useEffect(() => {
     if (params.id) {
@@ -261,7 +263,20 @@ export default function PostDetailPage() {
     const currentUsername = getUsernameFromToken()
     const isOwner = isAuthenticated && post && currentUsername === post.username
 
+    const handleEdit = () => {
+      if (!isAuthenticated) {
+        setShowLoginModal(true)
+        return
+      }
+      router.push(`/posts/${params.id}/edit`)
+    }
+
     const handleDelete = async () => {
+      if (!isAuthenticated) {
+        setShowLoginModal(true)
+        return
+      }
+
       if (!confirm('정말 이 게시글을 삭제하시겠습니까?')) {
         return
       }
@@ -281,7 +296,13 @@ export default function PostDetailPage() {
 
     return (
       <div className="min-h-screen bg-white">
-        <Header onLoginClick={() => router.push('/')} />
+        <Header onLoginClick={() => setShowLoginModal(true)} />
+        {showLoginModal && (
+          <LoginModal
+            isOpen={showLoginModal}
+            onClose={() => setShowLoginModal(false)}
+          />
+        )}
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {loading ? (
             <div className="text-center text-gray-500">로딩 중...</div>
@@ -316,7 +337,7 @@ export default function PostDetailPage() {
                   {isOwner && (
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => router.push(`/posts/${params.id}/edit`)}
+                        onClick={handleEdit}
                         className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
                       >
                         수정

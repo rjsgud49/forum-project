@@ -31,23 +31,6 @@ export default function CreatePostPage() {
     }
   }, [isAuthenticated])
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-white">
-        <Header onLoginClick={() => setShowLoginModal(true)} />
-        {showLoginModal && (
-          <LoginModal
-            isOpen={showLoginModal}
-            onClose={() => {
-              setShowLoginModal(false)
-              router.push('/')
-            }}
-          />
-        )}
-      </div>
-    )
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -157,9 +140,30 @@ export default function CreatePostPage() {
   return (
     <div className="min-h-screen bg-white">
       <Header onLoginClick={() => setShowLoginModal(true)} />
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">게시글 작성</h1>
-        <form onSubmit={handleSubmit} className="space-y-6">
+      {showLoginModal && (
+        <LoginModal
+          isOpen={showLoginModal}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
+      {!isAuthenticated && (
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center py-20">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">게시글 작성</h1>
+            <p className="text-gray-600 mb-6">게시글을 작성하려면 로그인이 필요합니다.</p>
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-secondary transition-colors"
+            >
+              로그인하기
+            </button>
+          </div>
+        </div>
+      )}
+      {isAuthenticated && (
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <h1 className="text-3xl font-bold text-gray-900 mb-8">게시글 작성</h1>
+          <form onSubmit={handleSubmit} className="space-y-6">
           {/* 프로필 이미지 업로드 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -297,7 +301,8 @@ export default function CreatePostPage() {
             aspectRatio={1}
           />
         )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -22,9 +22,9 @@ export default function MyPostsPage() {
   useEffect(() => {
     if (!isAuthenticated) {
       setShowLoginModal(true)
-      return
+    } else {
+      fetchPosts()
     }
-    fetchPosts()
   }, [page, isAuthenticated])
 
   const fetchPosts = async () => {
@@ -60,31 +60,35 @@ export default function MyPostsPage() {
     }
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-white">
-        <Header onLoginClick={() => setShowLoginModal(true)} />
-        {showLoginModal && (
-          <LoginModal
-            isOpen={showLoginModal}
-            onClose={() => {
-              setShowLoginModal(false)
-              router.push('/')
-            }}
-          />
-        )}
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-white">
       <Header onLoginClick={() => setShowLoginModal(true)} />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">내 게시글</h1>
-          <p className="text-gray-600">작성한 게시글을 관리하세요</p>
+      {showLoginModal && (
+        <LoginModal
+          isOpen={showLoginModal}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
+      {!isAuthenticated && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center py-20">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">내 게시글</h1>
+            <p className="text-gray-600 mb-6">내 게시글을 보려면 로그인이 필요합니다.</p>
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-secondary transition-colors"
+            >
+              로그인하기
+            </button>
+          </div>
         </div>
+      )}
+      {isAuthenticated && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">내 게시글</h1>
+            <p className="text-gray-600">작성한 게시글을 관리하세요</p>
+          </div>
 
         {loading && posts.length === 0 ? (
           <div className="text-center text-gray-500">로딩 중...</div>
@@ -145,7 +149,8 @@ export default function MyPostsPage() {
             </button>
           </div>
         )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
