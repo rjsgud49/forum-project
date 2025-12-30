@@ -1,15 +1,21 @@
 export function PostListSkeleton() {
   return (
-    <div className="space-y-4">
-      {Array.from({ length: 5 }).map((_, i) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      {Array.from({ length: 8 }).map((_, i) => (
         <div
           key={i}
-          className="p-6 bg-white border border-gray-200 rounded-lg animate-pulse"
+          className="bg-white border border-gray-200 rounded-lg overflow-hidden animate-pulse h-full flex flex-col"
         >
-          <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
-          <div className="flex items-center justify-between">
-            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+          {/* 이미지 영역 - 정사각형 */}
+          <div className="relative w-full aspect-square bg-gray-200"></div>
+          
+          {/* 카드 하단 정보 */}
+          <div className="p-3 flex-1 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-2">
+              <div className="h-3 bg-gray-200 rounded w-20"></div>
+              <div className="h-3 bg-gray-200 rounded w-16"></div>
+            </div>
+            <div className="h-3 bg-gray-200 rounded w-24"></div>
           </div>
         </div>
       ))}
