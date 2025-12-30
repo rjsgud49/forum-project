@@ -48,16 +48,16 @@ export default function Header({ onLoginClick }: HeaderProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center space-x-3" prefetch={true}>
-            {/* <Image
-              src="/asset/IMG_5412.png"
+            <Image
+              src="/asset/logo.png"
               alt="로고"
               width={40}
               height={40}
               className="object-contain"
               priority
-            /> */}
+            />
             <span className="text-lg font-semibold text-gray-800">
-              rjgud49's forum
+              rjsgud's forum
             </span>
           </Link>
           
