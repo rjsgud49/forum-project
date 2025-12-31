@@ -111,8 +111,12 @@ export default function GroupDetailPage() {
     try {
       const response = await groupApi.joinGroup(groupId)
       if (response.success) {
-        fetchGroupDetail()
-        alert('모임에 가입되었습니다!')
+        await fetchGroupDetail()
+        // 가입 여부 재확인
+        const membershipResponse = await groupApi.checkMembership(groupId)
+        if (membershipResponse.success && membershipResponse.data) {
+          alert('모임에 가입되었습니다!')
+        }
       }
     } catch (error: any) {
       console.error('모임 가입 실패:', error)
@@ -126,8 +130,12 @@ export default function GroupDetailPage() {
     try {
       const response = await groupApi.leaveGroup(groupId)
       if (response.success) {
-        fetchGroupDetail()
-        alert('모임에서 탈퇴되었습니다.')
+        await fetchGroupDetail()
+        // 가입 여부 재확인
+        const membershipResponse = await groupApi.checkMembership(groupId)
+        if (membershipResponse.success && !membershipResponse.data) {
+          alert('모임에서 탈퇴되었습니다.')
+        }
       }
     } catch (error: any) {
       console.error('모임 탈퇴 실패:', error)
@@ -326,7 +334,7 @@ export default function GroupDetailPage() {
         )}
 
         {activeTab === 'chat' && (
-          <div>
+          <div className="flex flex-col h-[calc(100vh-300px)]">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold">채팅방</h2>
               {group.isAdmin && (
@@ -354,24 +362,26 @@ export default function GroupDetailPage() {
             {chatRooms.length === 0 ? (
               <div className="text-center text-gray-500 py-12">채팅방이 없습니다.</div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {chatRooms.map((room) => (
-                  <div
-                    key={room.id}
-                    onClick={() => handleChatRoomClick(room.id)}
-                    className="border p-4 rounded hover:shadow-lg transition cursor-pointer"
-                  >
-                    <h3 className="text-lg font-semibold mb-2">
-                      {room.name}
-                      {room.isAdminRoom && (
-                        <span className="ml-2 text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
-                          관리자
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-gray-600 text-sm">{room.description}</p>
-                  </div>
-                ))}
+              <div className="flex-1 overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
+                  {chatRooms.map((room) => (
+                    <div
+                      key={room.id}
+                      onClick={() => handleChatRoomClick(room.id)}
+                      className="border p-4 rounded hover:shadow-lg transition cursor-pointer"
+                    >
+                      <h3 className="text-lg font-semibold mb-2">
+                        {room.name}
+                        {room.isAdminRoom && (
+                          <span className="ml-2 text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                            관리자
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-gray-600 text-sm">{room.description}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

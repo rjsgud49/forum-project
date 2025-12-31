@@ -131,10 +131,18 @@ public class GroupService {
         boolean isAdmin = false;
 
         if (currentUser != null) {
-            Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId());
-            if (member.isPresent()) {
+            // 모임 주인인지 확인
+            boolean isOwner = group.getOwner().getId().equals(currentUser.getId());
+            if (isOwner) {
                 isMember = true;
-                isAdmin = member.get().isAdmin();
+                isAdmin = true; // 모임 주인은 항상 관리자
+            } else {
+                // 멤버인지 확인
+                Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId());
+                if (member.isPresent()) {
+                    isMember = true;
+                    isAdmin = member.get().isAdmin();
+                }
             }
         }
 
@@ -157,6 +165,26 @@ public class GroupService {
                 .isMember(isMember)
                 .isAdmin(isAdmin)
                 .build();
+    }
+
+    /** 모임 가입 여부 확인 */
+    @Transactional(readOnly = true)
+    public boolean checkMembership(Long groupId) {
+        Users currentUser = getCurrentUser();
+        if (currentUser == null) {
+            return false;
+        }
+
+        Group group = groupRepository.findByIdAndIsDeletedFalse(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
+
+        // 모임 주인인지 확인
+        if (group.getOwner().getId().equals(currentUser.getId())) {
+            return true;
+        }
+
+        // 멤버인지 확인
+        return groupMemberRepository.existsByGroupIdAndUserId(groupId, currentUser.getId());
     }
 
     /** 모임 가입 */
@@ -212,10 +240,14 @@ public class GroupService {
         Group group = groupRepository.findByIdAndIsDeletedFalse(groupId)
                 .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
 
-        // 관리자만 수정 가능
-        Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId());
-        if (member.isEmpty() || !member.get().isAdmin()) {
-            throw new ApplicationUnauthorizedException("모임 관리자만 수정할 수 있습니다.");
+        // 모임 주인인지 확인
+        boolean isOwner = group.getOwner().getId().equals(currentUser.getId());
+        if (!isOwner) {
+            // 관리자만 수정 가능
+            Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId());
+            if (member.isEmpty() || !member.get().isAdmin()) {
+                throw new ApplicationUnauthorizedException("모임 관리자만 수정할 수 있습니다.");
+            }
         }
 
         if (dto.getName() != null && !dto.getName().trim().isEmpty()) {

@@ -389,6 +389,11 @@ export const groupApi = {
     return response.data
   },
 
+  checkMembership: async (groupId: number): Promise<ApiResponse<boolean>> => {
+    const response = await apiClient.get<ApiResponse<boolean>>(`/group/${groupId}/membership`)
+    return response.data
+  },
+
   deleteGroup: async (groupId: number): Promise<ApiResponse<void>> => {
     const response = await apiClient.delete<ApiResponse<void>>(`/group/${groupId}`)
     return response.data

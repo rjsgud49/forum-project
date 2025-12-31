@@ -41,6 +41,13 @@ public class GroupController {
         return ResponseEntity.ok(ApiResponse.ok(detail, "모임 상세 조회 성공"));
     }
 
+    /** 모임 가입 여부 확인 */
+    @GetMapping("/{groupId}/membership")
+    public ResponseEntity<ApiResponse<Boolean>> checkMembership(@PathVariable Long groupId) {
+        boolean isMember = groupService.checkMembership(groupId);
+        return ResponseEntity.ok(ApiResponse.ok(isMember, "모임 가입 여부 확인 성공"));
+    }
+
     /** 모임 가입 */
     @PostMapping("/{groupId}/join")
     public ResponseEntity<ApiResponse<Void>> joinGroup(@PathVariable Long groupId) {
