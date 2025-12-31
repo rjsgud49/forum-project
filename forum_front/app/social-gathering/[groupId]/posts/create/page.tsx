@@ -20,6 +20,7 @@ export default function CreateGroupPostPage() {
   const [profileImageUrl, setProfileImageUrl] = useState<string | undefined>(undefined)
   const [showImageCrop, setShowImageCrop] = useState(false)
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -32,12 +33,21 @@ export default function CreateGroupPostPage() {
     const file = e.target.files?.[0]
     if (file) {
       setSelectedImage(file)
-      setShowImageCrop(true)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setImagePreview(e.target.result as string)
+          setShowImageCrop(true)
+        }
+      }
+      reader.readAsDataURL(file)
     }
   }
 
-  const handleImageCrop = async (croppedFile: File) => {
+  const handleImageCrop = async (croppedBlob: Blob) => {
     try {
+      // Blob을 File로 변환
+      const croppedFile = new File([croppedBlob], 'cropped-image.jpg', { type: 'image/jpeg' })
       const response = await imageUploadApi.uploadImage(croppedFile)
       if (response.success && response.data) {
         setProfileImageUrl(response.data.url)
@@ -47,6 +57,7 @@ export default function CreateGroupPostPage() {
     } finally {
       setShowImageCrop(false)
       setSelectedImage(null)
+      setImagePreview('')
     }
   }
 
@@ -173,13 +184,15 @@ export default function CreateGroupPostPage() {
         </form>
       </div>
 
-      {showImageCrop && selectedImage && (
+      {showImageCrop && imagePreview && (
         <ImageCropModal
-          imageFile={selectedImage}
+          isOpen={showImageCrop}
+          imageSrc={imagePreview}
           onCrop={handleImageCrop}
           onClose={() => {
             setShowImageCrop(false)
             setSelectedImage(null)
+            setImagePreview('')
           }}
         />
       )}
