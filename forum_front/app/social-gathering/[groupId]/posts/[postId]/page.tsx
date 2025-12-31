@@ -11,7 +11,6 @@ import Header from '@/components/Header'
 import LoginModal from '@/components/LoginModal'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { getUsernameFromToken } from '@/utils/jwt'
 
 export default function GroupPostDetailPage() {
   const params = useParams()
@@ -19,7 +18,6 @@ export default function GroupPostDetailPage() {
   const groupId = Number(params.groupId)
   const postId = Number(params.postId)
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
-  const currentUsername = useSelector((state: RootState) => state.auth.username)
   const [post, setPost] = useState<GroupPostDetailDTO | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
