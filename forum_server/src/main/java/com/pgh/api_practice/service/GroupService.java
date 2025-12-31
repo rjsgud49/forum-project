@@ -201,6 +201,58 @@ public class GroupService {
         groupMemberRepository.deleteByGroupIdAndUserId(groupId, currentUser.getId());
     }
 
+    /** 모임 수정 */
+    @Transactional
+    public void updateGroup(Long groupId, UpdateGroupDTO dto) {
+        Users currentUser = getCurrentUser();
+        if (currentUser == null) {
+            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        }
+
+        Group group = groupRepository.findByIdAndIsDeletedFalse(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
+
+        // 관리자만 수정 가능
+        Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId());
+        if (member.isEmpty() || !member.get().isAdmin()) {
+            throw new ApplicationUnauthorizedException("모임 관리자만 수정할 수 있습니다.");
+        }
+
+        if (dto.getName() != null && !dto.getName().trim().isEmpty()) {
+            group.setName(dto.getName());
+        }
+        if (dto.getDescription() != null) {
+            group.setDescription(dto.getDescription());
+        }
+        if (dto.getProfileImageUrl() != null) {
+            group.setProfileImageUrl(dto.getProfileImageUrl());
+        }
+
+        groupRepository.save(group);
+    }
+
+    /** 모임 멤버 목록 조회 */
+    @Transactional(readOnly = true)
+    public List<GroupMemberDTO> getGroupMembers(Long groupId) {
+        Group group = groupRepository.findByIdAndIsDeletedFalse(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
+
+        List<GroupMember> members = groupMemberRepository.findByGroupId(groupId);
+        Long ownerId = group.getOwner().getId();
+
+        return members.stream().map(member -> {
+            Users user = member.getUser();
+            return GroupMemberDTO.builder()
+                    .userId(user.getId())
+                    .username(user.getUsername())
+                    .nickname(user.getNickname())
+                    .profileImageUrl(user.getProfileImageUrl())
+                    .isAdmin(member.isAdmin())
+                    .isOwner(user.getId().equals(ownerId))
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
     /** 모임 삭제 */
     @Transactional
     public void deleteGroup(Long groupId) {

@@ -159,6 +159,21 @@ export interface CreateGroupDTO {
   profileImageUrl?: string
 }
 
+export interface UpdateGroupDTO {
+  name?: string
+  description?: string
+  profileImageUrl?: string
+}
+
+export interface GroupMemberDTO {
+  userId: number
+  username: string
+  nickname: string
+  profileImageUrl?: string
+  isAdmin: boolean
+  isOwner: boolean
+}
+
 export interface GroupPostListDTO {
   id: number
   title: string

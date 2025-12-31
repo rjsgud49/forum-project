@@ -10,6 +10,7 @@ import Header from '@/components/Header'
 import LoginModal from '@/components/LoginModal'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
+import { getUsernameFromToken } from '@/utils/jwt'
 
 export default function ChatRoomPage() {
   const params = useParams()
@@ -24,6 +25,7 @@ export default function ChatRoomPage() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
+  const currentUsername = getUsernameFromToken()
 
   useEffect(() => {
     if (groupId && roomId) {
@@ -119,34 +121,49 @@ export default function ChatRoomPage() {
           {messages.length === 0 ? (
             <div className="text-center text-gray-500 py-12">메시지가 없습니다.</div>
           ) : (
-            messages.map((message) => (
-              <div key={message.id} className="flex gap-3">
-                <div className="flex-shrink-0">
-                  {message.profileImageUrl ? (
-                    <img
-                      src={message.profileImageUrl}
-                      alt={message.nickname}
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-sm font-semibold">
-                      {message.nickname.charAt(0).toUpperCase()}
+            messages.map((message) => {
+              const isMyMessage = currentUsername === message.username
+              return (
+                <div
+                  key={message.id}
+                  className={`flex gap-3 ${isMyMessage ? 'flex-row-reverse' : ''}`}
+                >
+                  <div className="flex-shrink-0">
+                    {message.profileImageUrl ? (
+                      <img
+                        src={message.profileImageUrl}
+                        alt={message.nickname}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-sm font-semibold">
+                        {message.nickname.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className={`flex-1 ${isMyMessage ? 'flex flex-col items-end' : ''}`}>
+                    <div className={`flex items-baseline gap-2 mb-1 ${isMyMessage ? 'flex-row-reverse' : ''}`}>
+                      <span className="font-semibold text-sm">
+                        {message.nickname}
+                        {isMyMessage && <span className="text-blue-500 ml-1">(나)</span>}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {format(new Date(message.createdTime), 'HH:mm', { locale: ko })}
+                      </span>
                     </div>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span className="font-semibold text-sm">{message.nickname}</span>
-                    <span className="text-xs text-gray-500">
-                      {format(new Date(message.createdTime), 'HH:mm', { locale: ko })}
-                    </span>
-                  </div>
-                  <div className="bg-gray-100 rounded-lg px-4 py-2 inline-block">
-                    <p className="text-sm whitespace-pre-wrap">{message.message}</p>
+                    <div
+                      className={`rounded-lg px-4 py-2 inline-block ${
+                        isMyMessage
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-100 text-gray-900'
+                      }`}
+                    >
+                      <p className="text-sm whitespace-pre-wrap">{message.message}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              )
+            })
           )}
           <div ref={messagesEndRef} />
         </div>

@@ -5,13 +5,13 @@ import { useParams, useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
 import { groupApi } from '@/services/api'
-import type { GroupDetailDTO, GroupPostListDTO, GroupChatRoomDTO } from '@/types/api'
+import type { GroupDetailDTO, GroupPostListDTO, GroupChatRoomDTO, GroupMemberDTO, UpdateGroupDTO } from '@/types/api'
 import Header from '@/components/Header'
 import LoginModal from '@/components/LoginModal'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 
-type TabType = 'intro' | 'posts' | 'chat'
+type TabType = 'intro' | 'posts' | 'chat' | 'manage'
 
 export default function GroupDetailPage() {
   const params = useParams()
@@ -22,8 +22,13 @@ export default function GroupDetailPage() {
   const [group, setGroup] = useState<GroupDetailDTO | null>(null)
   const [posts, setPosts] = useState<GroupPostListDTO[]>([])
   const [chatRooms, setChatRooms] = useState<GroupChatRoomDTO[]>([])
+  const [members, setMembers] = useState<GroupMemberDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [isEditingDescription, setIsEditingDescription] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editProfileImageUrl, setEditProfileImageUrl] = useState('')
 
   useEffect(() => {
     if (groupId) {
@@ -35,8 +40,18 @@ export default function GroupDetailPage() {
   useEffect(() => {
     if (activeTab === 'posts' && groupId) {
       fetchPosts()
+    } else if (activeTab === 'manage' && groupId) {
+      fetchMembers()
     }
   }, [activeTab, groupId])
+
+  useEffect(() => {
+    if (group) {
+      setEditName(group.name)
+      setEditDescription(group.description)
+      setEditProfileImageUrl(group.profileImageUrl || '')
+    }
+  }, [group])
 
   const fetchGroupDetail = async () => {
     try {
@@ -73,6 +88,17 @@ export default function GroupDetailPage() {
       }
     } catch (error) {
       console.error('채팅방 목록 조회 실패:', error)
+    }
+  }
+
+  const fetchMembers = async () => {
+    try {
+      const response = await groupApi.getGroupMembers(groupId)
+      if (response.success && response.data) {
+        setMembers(response.data)
+      }
+    } catch (error) {
+      console.error('멤버 목록 조회 실패:', error)
     }
   }
 
@@ -115,6 +141,27 @@ export default function GroupDetailPage() {
 
   const handleChatRoomClick = (roomId: number) => {
     router.push(`/social-gathering/${groupId}/chat/${roomId}`)
+  }
+
+  const handleUpdateGroup = async () => {
+    if (!group) return
+
+    try {
+      const updateData: UpdateGroupDTO = {
+        name: editName,
+        description: editDescription,
+        profileImageUrl: editProfileImageUrl || undefined,
+      }
+      const response = await groupApi.updateGroup(groupId, updateData)
+      if (response.success) {
+        setIsEditingDescription(false)
+        fetchGroupDetail()
+        alert('모임 정보가 수정되었습니다.')
+      }
+    } catch (error: any) {
+      console.error('모임 수정 실패:', error)
+      alert(error.response?.data?.message || '모임 수정에 실패했습니다.')
+    }
   }
 
   if (loading) {
@@ -166,22 +213,12 @@ export default function GroupDetailPage() {
             </div>
             <div className="flex gap-2">
               {group.isMember ? (
-                <>
-                  <button
-                    onClick={handleLeave}
-                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition"
-                  >
-                    탈퇴하기
-                  </button>
-                  {group.isAdmin && (
-                    <button
-                      onClick={() => router.push(`/social-gathering/${groupId}/settings`)}
-                      className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded transition"
-                    >
-                      설정
-                    </button>
-                  )}
-                </>
+                <button
+                  onClick={handleLeave}
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition"
+                >
+                  탈퇴하기
+                </button>
               ) : (
                 <button
                   onClick={handleJoin}
@@ -227,6 +264,18 @@ export default function GroupDetailPage() {
             >
               채팅방
             </button>
+            {group.isAdmin && (
+              <button
+                onClick={() => setActiveTab('manage')}
+                className={`pb-2 px-4 ${
+                  activeTab === 'manage'
+                    ? 'border-b-2 border-blue-500 text-blue-500 font-semibold'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                모임 관리
+              </button>
+            )}
           </div>
         </div>
 
@@ -325,6 +374,116 @@ export default function GroupDetailPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'manage' && (
+          <div>
+            <h2 className="text-2xl font-bold mb-6">모임 관리</h2>
+
+            {/* 소개 수정 */}
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold mb-4">모임 정보 수정</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">모임 이름</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">모임 소개</label>
+                  <textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    rows={6}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">프로필 이미지 URL</label>
+                  <input
+                    type="text"
+                    value={editProfileImageUrl}
+                    onChange={(e) => setEditProfileImageUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <button
+                  onClick={handleUpdateGroup}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition"
+                >
+                  저장하기
+                </button>
+              </div>
+            </div>
+
+            {/* 멤버 관리 */}
+            <div>
+              <h3 className="text-xl font-semibold mb-4">멤버 관리</h3>
+              {members.length === 0 ? (
+                <div className="text-center text-gray-500 py-12">멤버가 없습니다.</div>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">사용자</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">역할</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {members.map((member) => (
+                        <tr key={member.userId}>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              {member.profileImageUrl ? (
+                                <img
+                                  src={member.profileImageUrl}
+                                  alt={member.nickname}
+                                  className="w-10 h-10 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold">
+                                  {member.nickname.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <div className="font-medium">{member.nickname}</div>
+                                <div className="text-sm text-gray-500">@{member.username}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-2">
+                              {member.isOwner && (
+                                <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">
+                                  주인
+                                </span>
+                              )}
+                              {member.isAdmin && (
+                                <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                                  관리자
+                                </span>
+                              )}
+                              {!member.isOwner && !member.isAdmin && (
+                                <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded">
+                                  멤버
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

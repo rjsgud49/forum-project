@@ -55,6 +55,22 @@ public class GroupController {
         return ResponseEntity.ok(ApiResponse.ok("모임에서 탈퇴되었습니다."));
     }
 
+    /** 모임 수정 */
+    @PatchMapping("/{groupId}")
+    public ResponseEntity<ApiResponse<Void>> updateGroup(
+            @PathVariable Long groupId,
+            @Valid @RequestBody UpdateGroupDTO dto) {
+        groupService.updateGroup(groupId, dto);
+        return ResponseEntity.ok(ApiResponse.ok("모임 정보가 수정되었습니다."));
+    }
+
+    /** 모임 멤버 목록 조회 */
+    @GetMapping("/{groupId}/members")
+    public ResponseEntity<ApiResponse<List<GroupMemberDTO>>> getGroupMembers(@PathVariable Long groupId) {
+        List<GroupMemberDTO> members = groupService.getGroupMembers(groupId);
+        return ResponseEntity.ok(ApiResponse.ok(members, "모임 멤버 목록 조회 성공"));
+    }
+
     /** 모임 삭제 */
     @DeleteMapping("/{groupId}")
     public ResponseEntity<ApiResponse<Void>> deleteGroup(@PathVariable Long groupId) {
