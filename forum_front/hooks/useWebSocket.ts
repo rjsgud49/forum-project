@@ -75,16 +75,21 @@ export function useWebSocket({
           `/topic/chat/${groupId}/${roomId}`,
           (message: IMessage) => {
             try {
-              console.log('메시지 수신:', message.body)
+              console.log('메시지 수신 (원본):', message)
+              console.log('메시지 수신 (body):', message.body)
+              console.log('메시지 수신 (headers):', message.headers)
               const data = JSON.parse(message.body)
               console.log('파싱된 메시지 데이터:', data)
               onMessage?.(data)
             } catch (error) {
               console.error('메시지 파싱 오류:', error, message.body)
             }
+          },
+          {
+            // 구독 헤더 (필요시)
           }
         )
-        console.log('메시지 구독 완료:', `/topic/chat/${groupId}/${roomId}`)
+        console.log('메시지 구독 완료:', `/topic/chat/${groupId}/${roomId}`, subscription)
 
         // 타이핑 인디케이터 구독
         clientRef.current.subscribe(
@@ -150,11 +155,19 @@ export function useWebSocket({
       },
       onStompError: (frame) => {
         console.error('STOMP 오류:', frame)
+        console.error('STOMP 오류 상세:', {
+          command: frame.command,
+          headers: frame.headers,
+          body: frame.body,
+        })
         setIsConnected(false)
       },
       onWebSocketError: (event) => {
         console.error('WebSocket 오류:', event)
         setIsConnected(false)
+      },
+      onError: (event) => {
+        console.error('WebSocket 일반 오류:', event)
       },
     })
 

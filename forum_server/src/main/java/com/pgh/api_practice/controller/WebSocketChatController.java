@@ -55,9 +55,18 @@ public class WebSocketChatController {
             
             String topic = "/topic/chat/" + groupId + "/" + roomId;
             log.info("메시지 브로드캐스트 시작: topic={}, messageDTO={}", topic, messageDTO);
+            log.info("메시지 DTO 상세: id={}, message={}, username={}, nickname={}, isAdmin={}, readCount={}", 
+                    messageDTO.getId(), messageDTO.getMessage(), messageDTO.getUsername(), 
+                    messageDTO.getNickname(), messageDTO.isAdmin(), messageDTO.getReadCount());
             
-            // 해당 채팅방의 모든 구독자에게 메시지 전송
-            messagingTemplate.convertAndSend(topic, messageDTO);
+            try {
+                // 해당 채팅방의 모든 구독자에게 메시지 전송
+                messagingTemplate.convertAndSend(topic, messageDTO);
+                log.info("convertAndSend 호출 완료: topic={}", topic);
+            } catch (Exception e) {
+                log.error("convertAndSend 오류: {}", e.getMessage(), e);
+                throw e;
+            }
             
             log.info("메시지 브로드캐스트 완료: groupId={}, roomId={}, username={}", 
                     groupId, roomId, principal.getName());
