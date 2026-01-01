@@ -27,6 +27,7 @@ export default function GroupDetailPage() {
   const [chatRooms, setChatRooms] = useState<GroupChatRoomDTO[]>([])
   const [members, setMembers] = useState<GroupMemberDTO[]>([])
   const [loading, setLoading] = useState(true)
+  const [postsLoading, setPostsLoading] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [editName, setEditName] = useState('')
@@ -97,14 +98,25 @@ export default function GroupDetailPage() {
 
   const fetchPosts = async () => {
     try {
+      setPostsLoading(true)
+      console.log('모임 게시글 조회 시작, groupId:', groupId)
       // 모임별 게시글 API 사용
       const response = await postApi.getGroupPostList(groupId, 0, 20, 'RESENT')
+      console.log('모임 게시글 API 응답:', response)
       if (response.success && response.data) {
         const content = response.data.content || []
+        console.log('모임 게시글 목록:', content, '개수:', content.length)
         setPosts(content)
+      } else {
+        console.warn('모임 게시글 조회 실패 또는 데이터 없음:', response)
+        setPosts([])
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('모임 활동 게시물 조회 실패:', error)
+      console.error('에러 상세:', error.response?.data || error.message)
+      setPosts([])
+    } finally {
+      setPostsLoading(false)
     }
   }
 
@@ -353,8 +365,14 @@ export default function GroupDetailPage() {
                 </button>
               )}
             </div>
-            {posts.length === 0 ? (
-              <div className="text-center text-gray-500 py-12">등록된 활동이 없습니다.</div>
+            {postsLoading ? (
+              <div className="text-center text-gray-500 py-12">로딩 중...</div>
+            ) : posts.length === 0 ? (
+              <div className="text-center text-gray-500 py-12">
+                등록된 활동이 없습니다.
+                <br />
+                <span className="text-sm">모임 게시글을 작성해보세요!</span>
+              </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {posts.map((post) => (

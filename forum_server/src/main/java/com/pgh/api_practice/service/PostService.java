@@ -5,6 +5,7 @@ import com.pgh.api_practice.dto.PatchPostDTO;
 import com.pgh.api_practice.dto.PostDetailDTO;
 import com.pgh.api_practice.dto.PostListDTO;
 import com.pgh.api_practice.entity.Group;
+import com.pgh.api_practice.entity.GroupPost;
 import com.pgh.api_practice.entity.Post;
 import com.pgh.api_practice.entity.PostLike;
 import com.pgh.api_practice.entity.PostTag;
@@ -13,6 +14,7 @@ import com.pgh.api_practice.entity.Users;
 import com.pgh.api_practice.exception.ApplicationUnauthorizedException;
 import com.pgh.api_practice.exception.ResourceNotFoundException;
 import com.pgh.api_practice.repository.GroupMemberRepository;
+import com.pgh.api_practice.repository.GroupPostRepository;
 import com.pgh.api_practice.repository.GroupRepository;
 import com.pgh.api_practice.repository.PostLikeRepository;
 import com.pgh.api_practice.repository.PostRepository;
@@ -44,6 +46,7 @@ public class PostService {
     private final PostTagRepository postTagRepository;
     private final GroupRepository groupRepository;
     private final GroupMemberRepository groupMemberRepository;
+    private final GroupPostRepository groupPostRepository;
 
     /** ✅ 게시글 저장 */
     @Transactional
@@ -658,19 +661,26 @@ public class PostService {
             throw new ResourceNotFoundException("모임을 찾을 수 없습니다.");
         }
         
-        Page<Post> posts;
-        
+        // 1. posts 테이블에서 group_id로 조회
+        Page<Post> postsFromPostsTable;
         if ("RESENT".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
+            postsFromPostsTable = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
         } else if ("HITS".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findByGroupIdOrderByViewsDesc(groupId, pageable);
+            postsFromPostsTable = postRepository.findByGroupIdOrderByViewsDesc(groupId, pageable);
         } else if ("LIKES".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findByGroupIdOrderByLikesDesc(groupId, pageable);
+            postsFromPostsTable = postRepository.findByGroupIdOrderByLikesDesc(groupId, pageable);
         } else {
-            posts = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
+            postsFromPostsTable = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
         }
         
-        return posts.map(post -> {
+        // 2. group_posts 테이블에서 조회
+        Page<GroupPost> groupPosts = groupPostRepository.findByGroupIdAndIsDeletedFalseOrderByCreatedTimeDesc(groupId, pageable);
+        
+        // 3. 두 결과를 합쳐서 PostListDTO로 변환
+        List<PostListDTO> allPosts = new ArrayList<>();
+        
+        // posts 테이블의 게시글 변환
+        postsFromPostsTable.getContent().forEach(post -> {
             LocalDateTime updateTime = post.getUpdatedTime();
             if (updateTime == null || updateTime.isBefore(post.getCreatedTime()) || 
                 updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
@@ -702,7 +712,51 @@ public class PostService {
                        .isPublic(post.isPublic());
             }
             
-            return builder.build();
+            allPosts.add(builder.build());
         });
+        
+        // group_posts 테이블의 게시글 변환
+        groupPosts.getContent().forEach(groupPost -> {
+            LocalDateTime updateTime = groupPost.getUpdatedTime();
+            if (updateTime == null || updateTime.isBefore(groupPost.getCreatedTime()) || 
+                updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
+                updateTime = groupPost.getCreatedTime();
+            }
+            
+            // GroupPost는 PostLike와 연결되어 있지 않으므로 likeCount는 0
+            PostListDTO dto = PostListDTO.builder()
+                    .id(groupPost.getId())
+                    .title(groupPost.getTitle())
+                    .username(groupPost.getUser().getUsername())
+                    .views(groupPost.getViews())
+                    .createDateTime(groupPost.getCreatedTime())
+                    .updateDateTime(updateTime)
+                    .profileImageUrl(groupPost.getProfileImageUrl())
+                    .likeCount(0) // GroupPost는 좋아요 기능이 없을 수 있음
+                    .tags(new ArrayList<>()) // GroupPost는 태그가 없을 수 있음
+                    .groupId(groupPost.getGroup().getId())
+                    .groupName(groupPost.getGroup().getName())
+                    .isPublic(true) // group_posts는 항상 모임 내부 게시글이므로 기본값 true
+                    .build();
+            
+            allPosts.add(dto);
+        });
+        
+        // 정렬 (sortType에 따라)
+        if ("HITS".equalsIgnoreCase(sortType)) {
+            allPosts.sort((a, b) -> Integer.compare(b.getViews(), a.getViews()));
+        } else if ("LIKES".equalsIgnoreCase(sortType)) {
+            allPosts.sort((a, b) -> Long.compare(b.getLikeCount(), a.getLikeCount()));
+        } else {
+            // RESENT 또는 기본값: 최신순
+            allPosts.sort((a, b) -> b.getCreateDateTime().compareTo(a.getCreateDateTime()));
+        }
+        
+        // 페이지네이션 적용
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), allPosts.size());
+        List<PostListDTO> pagedPosts = allPosts.subList(start, end);
+        
+        return new PageImpl<>(pagedPosts, pageable, allPosts.size());
     }
 }

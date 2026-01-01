@@ -94,7 +94,9 @@ export default function CreatePostPage() {
       }
       
       console.log('제출할 데이터:', submitData)
+      console.log('groupId:', submitData.groupId, 'isPublic:', submitData.isPublic)
       const response = await postApi.createPost(submitData)
+      console.log('게시글 작성 응답:', response)
       if (response.success) {
         router.push('/')
       }
