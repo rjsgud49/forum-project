@@ -223,4 +223,15 @@ public class GroupController {
         groupService.deleteChatMessage(groupId, roomId, messageId);
         return ResponseEntity.ok(ApiResponse.ok("메시지가 삭제되었습니다."));
     }
+
+    /** 채팅 메시지 반응 추가/제거 */
+    @PostMapping("/{groupId}/chat-rooms/{roomId}/messages/{messageId}/reactions")
+    public ResponseEntity<ApiResponse<Void>> toggleReaction(
+            @PathVariable Long groupId,
+            @PathVariable Long roomId,
+            @PathVariable Long messageId,
+            @RequestParam String emoji) {
+        groupService.toggleReaction(groupId, roomId, messageId, emoji);
+        return ResponseEntity.ok(ApiResponse.ok("반응이 업데이트되었습니다."));
+    }
 }

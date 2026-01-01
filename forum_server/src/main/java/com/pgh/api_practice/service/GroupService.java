@@ -30,6 +30,7 @@ public class GroupService {
     private final GroupPostRepository groupPostRepository;
     private final GroupChatMessageRepository groupChatMessageRepository;
     private final UserRepository userRepository;
+    private final MessageReactionRepository messageReactionRepository;
 
     /** 현재 사용자 가져오기 */
     private Users getCurrentUser() {
@@ -686,7 +687,7 @@ public class GroupService {
         }
 
         final List<Long> finalAdminIds = adminIds;
-        return messages.stream().map(msg -> {
+        return messages.stream().<GroupChatMessageDTO>map(msg -> {
             Long userId = msg.getUser().getId();
             boolean isAdmin = finalAdminIds.contains(userId);
             
@@ -719,6 +720,32 @@ public class GroupService {
                         .build();
             }
             
+            // 반응 정보 조회
+            List<GroupChatMessageDTO.ReactionInfo> reactions = new ArrayList<>();
+            try {
+                List<Object[]> reactionCounts = messageReactionRepository.countByMessageIdGroupByEmoji(msg.getId());
+                for (Object[] row : reactionCounts) {
+                    String emoji = (String) row[0];
+                    Long count = ((Number) row[1]).longValue();
+                    reactions.add(GroupChatMessageDTO.ReactionInfo.builder()
+                            .emoji(emoji)
+                            .count(count.intValue())
+                            .build());
+                }
+            } catch (Exception e) {
+                // 반응 정보 조회 실패 시 빈 리스트
+            }
+
+            // 현재 사용자가 추가한 반응 목록
+            List<String> myReactions = new ArrayList<>();
+            try {
+                if (currentUser != null) {
+                    myReactions = messageReactionRepository.findEmojisByMessageIdAndUserId(msg.getId(), currentUser.getId());
+                }
+            } catch (Exception e) {
+                // 현재 사용자 반응 조회 실패 시 빈 리스트
+            }
+
             return GroupChatMessageDTO.builder()
                     .id(msg.getId())
                     .message(msg.getMessage())
@@ -731,6 +758,8 @@ public class GroupService {
                     .readCount(msg.getReadCount())
                     .replyToMessageId(msg.getReplyToMessage() != null ? msg.getReplyToMessage().getId() : null)
                     .replyToMessage(replyToMessageInfo)
+                    .reactions(reactions)
+                    .myReactions(myReactions)
                     .build();
         }).collect(Collectors.toList());
     }
@@ -777,5 +806,43 @@ public class GroupService {
         // 소프트 삭제
         message.setDeleted(true);
         groupChatMessageRepository.save(message);
+    }
+
+    /** 채팅 메시지 반응 추가/제거 */
+    @Transactional
+    public void toggleReaction(Long groupId, Long roomId, Long messageId, String emoji) {
+        Users currentUser = getCurrentUser();
+        if (currentUser == null) {
+            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        }
+
+        GroupChatMessage message = groupChatMessageRepository.findById(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("메시지를 찾을 수 없습니다."));
+
+        // 같은 채팅방의 메시지인지 확인
+        if (!message.getChatRoom().getId().equals(roomId)) {
+            throw new IllegalArgumentException("메시지가 해당 채팅방에 없습니다.");
+        }
+
+        // 모임 멤버인지 확인
+        if (!groupMemberRepository.existsByGroupIdAndUserId(groupId, currentUser.getId())) {
+            throw new ApplicationUnauthorizedException("모임 멤버만 반응을 추가할 수 있습니다.");
+        }
+
+        // 이미 반응이 있는지 확인
+        boolean exists = messageReactionRepository.existsByMessageIdAndUserIdAndEmoji(messageId, currentUser.getId(), emoji);
+        
+        if (exists) {
+            // 있으면 제거
+            messageReactionRepository.deleteByMessageIdAndUserIdAndEmoji(messageId, currentUser.getId(), emoji);
+        } else {
+            // 없으면 추가
+            MessageReaction reaction = MessageReaction.builder()
+                    .message(message)
+                    .user(currentUser)
+                    .emoji(emoji)
+                    .build();
+            messageReactionRepository.save(reaction);
+        }
     }
 }

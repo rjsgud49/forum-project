@@ -52,7 +52,7 @@ export default function ChatRoomPage() {
   }, [currentUsername])
   const [showMembers, setShowMembers] = useState(false)
   const [members, setMembers] = useState<GroupMemberDTO[]>([])
-  const [messageReactions, setMessageReactions] = useState<Record<number, string[]>>({})
+  const [reactingMessageId, setReactingMessageId] = useState<number | null>(null) // 반응 추가 중인 메시지 ID
   const [editingRoom, setEditingRoom] = useState(false)
   const [editRoomName, setEditRoomName] = useState('')
   const [editRoomDescription, setEditRoomDescription] = useState('')
@@ -646,18 +646,34 @@ export default function ChatRoomPage() {
     setReplyingTo(null)
   }
 
-  // 메시지 반응 추가
-  const handleAddReaction = (messageId: number, emoji: string) => {
-    setMessageReactions(prev => {
-      const current = prev[messageId] || []
-      if (current.includes(emoji)) {
-        // 이미 있으면 제거
-        return { ...prev, [messageId]: current.filter(e => e !== emoji) }
-      } else {
-        // 없으면 추가
-        return { ...prev, [messageId]: [...current, emoji] }
+  // 메시지 반응 추가/제거
+  const handleAddReaction = async (messageId: number, emoji: string) => {
+    try {
+      const response = await groupApi.toggleReaction(groupId, roomId, messageId, emoji)
+      if (response.success) {
+        // 해당 메시지의 반응 정보만 업데이트
+        const messageResponse = await groupApi.getChatMessages(groupId, roomId, 0, 100)
+        if (messageResponse.success && messageResponse.data) {
+          const updatedMessage = messageResponse.data.find(m => m.id === messageId)
+          if (updatedMessage) {
+            setMessages(prev => prev.map(m => 
+              m.id === messageId ? updatedMessage : m
+            ))
+          }
+        }
+        setReactingMessageId(null) // 반응 모달 닫기
+        closeContextMenu()
       }
-    })
+    } catch (error: any) {
+      console.error('반응 추가/제거 실패:', error)
+      alert(error.response?.data?.message || '반응 추가/제거에 실패했습니다.')
+    }
+  }
+
+  // 반응 메뉴 열기
+  const handleOpenReactionMenu = (messageId: number) => {
+    setReactingMessageId(messageId)
+    closeContextMenu()
   }
 
   const handleChatRoomClick = (selectedRoomId: number) => {
@@ -1192,34 +1208,23 @@ export default function ChatRoomPage() {
                                         {message.message}
                                       </p>
                                       {/* 반응 표시 */}
-                                      {messageReactions[message.id] && messageReactions[message.id].length > 0 && (
+                                      {message.reactions && message.reactions.length > 0 && (
                                         <div className="flex gap-1 mt-2 flex-wrap">
-                                          {Array.from(new Set(messageReactions[message.id])).map((emoji, idx) => (
+                                          {message.reactions.map((reaction, idx) => (
                                             <button
                                               key={idx}
-                                              onClick={() => handleAddReaction(message.id, emoji)}
-                                              className="px-2 py-1 bg-black bg-opacity-20 rounded-full text-xs hover:bg-opacity-30 transition"
+                                              onClick={() => handleAddReaction(message.id, reaction.emoji)}
+                                              className={`px-2 py-1 rounded-full text-xs hover:bg-opacity-30 transition ${
+                                                message.myReactions?.includes(reaction.emoji)
+                                                  ? 'bg-blue-500 bg-opacity-30'
+                                                  : 'bg-black bg-opacity-20'
+                                              }`}
                                             >
-                                              {emoji} {messageReactions[message.id].filter(e => e === emoji).length}
+                                              {reaction.emoji} {reaction.count}
                                             </button>
                                           ))}
                                         </div>
                                       )}
-                                    </div>
-                                    {/* 반응 추가 버튼 (호버 시) */}
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                                      <div className="flex gap-1">
-                                        {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
-                                          <button
-                                            key={emoji}
-                                            onClick={() => handleAddReaction(message.id, emoji)}
-                                            className="text-lg hover:scale-125 transition-transform px-1"
-                                            title={emoji}
-                                          >
-                                            {emoji}
-                                          </button>
-                                        ))}
-                                      </div>
                                     </div>
                                   </div>
                                   {/* 읽음 표시 - 채팅박스 하단 높이에 맞춰 표시 */}
@@ -1272,6 +1277,12 @@ export default function ChatRoomPage() {
                   }}
                   onClick={(e) => e.stopPropagation()}
                 >
+                  <button
+                    onClick={() => handleOpenReactionMenu(contextMenu.messageId)}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    반응 추가
+                  </button>
                   {contextMenu.isMyMessage ? (
                     <>
                       <button
@@ -1301,6 +1312,39 @@ export default function ChatRoomPage() {
                       답글
                     </button>
                   )}
+                </div>
+              )}
+
+              {/* 반응 선택 모달 */}
+              {reactingMessageId && (
+                <div
+                  className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center"
+                  onClick={() => setReactingMessageId(null)}
+                >
+                  <div
+                    className="bg-white rounded-lg p-4 shadow-lg"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="text-sm font-semibold mb-3">반응 선택</div>
+                    <div className="flex gap-2">
+                      {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleAddReaction(reactingMessageId, emoji)}
+                          className="text-2xl hover:scale-125 transition-transform px-2 py-1 hover:bg-gray-100 rounded"
+                          title={emoji}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setReactingMessageId(null)}
+                      className="mt-3 w-full px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded"
+                    >
+                      취소
+                    </button>
+                  </div>
                 </div>
               )}
 

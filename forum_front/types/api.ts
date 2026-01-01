@@ -263,6 +263,13 @@ export interface GroupChatMessageDTO {
     displayName?: string
     profileImageUrl?: string
   }
+  reactions?: ReactionInfo[]  // 반응 정보
+  myReactions?: string[]  // 현재 사용자가 추가한 반응 목록
+}
+
+export interface ReactionInfo {
+  emoji: string
+  count: number
 }
 
 export interface CreateGroupChatMessageDTO {

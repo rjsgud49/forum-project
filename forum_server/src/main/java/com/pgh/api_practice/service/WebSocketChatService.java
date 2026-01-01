@@ -11,6 +11,7 @@ import com.pgh.api_practice.repository.GroupChatMessageRepository;
 import com.pgh.api_practice.repository.GroupChatRoomRepository;
 import com.pgh.api_practice.repository.GroupMemberRepository;
 import com.pgh.api_practice.repository.MessageReadRepository;
+import com.pgh.api_practice.repository.MessageReactionRepository;
 import com.pgh.api_practice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ public class WebSocketChatService {
     private final GroupMemberRepository groupMemberRepository;
     private final MessageReadRepository readRepository;
     private final UserRepository userRepository;
+    private final com.pgh.api_practice.repository.MessageReactionRepository reactionRepository;
 
     /** 메시지 저장 및 DTO 반환 */
     @Transactional
@@ -199,6 +201,37 @@ public class WebSocketChatService {
             log.warn("현재 메시지 작성자의 displayName 조회 실패: {}", e.getMessage());
         }
 
+        // 반응 정보 조회
+        List<GroupChatMessageDTO.ReactionInfo> reactions = new ArrayList<>();
+        try {
+            List<Object[]> reactionCounts = reactionRepository.countByMessageIdGroupByEmoji(message.getId());
+            for (Object[] row : reactionCounts) {
+                String emoji = (String) row[0];
+                Long count = ((Number) row[1]).longValue();
+                reactions.add(GroupChatMessageDTO.ReactionInfo.builder()
+                        .emoji(emoji)
+                        .count(count.intValue())
+                        .build());
+            }
+        } catch (Exception e) {
+            log.warn("반응 정보 조회 실패: {}", e.getMessage());
+        }
+
+        // 현재 사용자가 추가한 반응 목록 (username이 null이면 빈 리스트)
+        List<String> myReactions = new ArrayList<>();
+        try {
+            var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.getName() != null && !"anonymousUser".equals(authentication.getName())) {
+                String currentUsername = authentication.getName();
+                Optional<Users> currentUserOpt = userRepository.findByUsername(currentUsername);
+                if (currentUserOpt.isPresent()) {
+                    myReactions = reactionRepository.findEmojisByMessageIdAndUserId(message.getId(), currentUserOpt.get().getId());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("현재 사용자 반응 조회 실패: {}", e.getMessage());
+        }
+
         return GroupChatMessageDTO.builder()
                 .id(message.getId())
                 .message(message.getMessage())
@@ -211,6 +244,34 @@ public class WebSocketChatService {
                 .readCount(message.getReadCount())
                 .replyToMessageId(message.getReplyToMessage() != null ? message.getReplyToMessage().getId() : null)
                 .replyToMessage(replyToMessageInfo)
+                .reactions(reactions)
+                .myReactions(myReactions)
                 .build();
+    }
+
+    /** 반응 추가/제거 */
+    @Transactional
+    public void toggleReaction(Long messageId, String emoji, String username) {
+        GroupChatMessage message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("메시지를 찾을 수 없습니다."));
+
+        Users user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("사용자를 찾을 수 없습니다."));
+
+        // 이미 반응이 있는지 확인
+        boolean exists = reactionRepository.existsByMessageIdAndUserIdAndEmoji(messageId, user.getId(), emoji);
+        
+        if (exists) {
+            // 있으면 제거
+            reactionRepository.deleteByMessageIdAndUserIdAndEmoji(messageId, user.getId(), emoji);
+        } else {
+            // 없으면 추가
+            com.pgh.api_practice.entity.MessageReaction reaction = com.pgh.api_practice.entity.MessageReaction.builder()
+                    .message(message)
+                    .user(user)
+                    .emoji(emoji)
+                    .build();
+            reactionRepository.save(reaction);
+        }
     }
 }

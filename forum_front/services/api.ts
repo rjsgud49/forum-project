@@ -482,6 +482,13 @@ export const groupApi = {
     return response.data
   },
 
+  toggleReaction: async (groupId: number, roomId: number, messageId: number, emoji: string): Promise<ApiResponse<void>> => {
+    const response = await apiClient.post<ApiResponse<void>>(`/group/${groupId}/chat-rooms/${roomId}/messages/${messageId}/reactions`, null, {
+      params: { emoji },
+    })
+    return response.data
+  },
+
   getChatMessages: async (groupId: number, roomId: number, page: number = 0, size: number = 50): Promise<ApiResponse<import('@/types/api').GroupChatMessageDTO[]>> => {
     const response = await apiClient.get<ApiResponse<import('@/types/api').GroupChatMessageDTO[]>>(`/group/${groupId}/chat-rooms/${roomId}/messages`, {
       params: { page, size },
