@@ -1225,7 +1225,10 @@ export default function ChatRoomPage() {
                                   {/* 읽음 표시 - 채팅박스 하단 높이에 맞춰 표시 */}
                                   {isMyMessage && group?.memberCount && (
                                     <span className="text-xs text-gray-400 whitespace-nowrap self-end pb-8">
-                                    {Math.max(0, (group.memberCount || 0) - (message.readCount || 0))}
+                                      {(() => {
+                                        const unreadCount = Math.max(0, (group.memberCount || 0) - (message.readCount || 0) - 1) // 본인 제외
+                                        return unreadCount > 0 ? `읽음 ${unreadCount}` : ''
+                                      })()}
                                     </span>
                                   )}
                                 </>
