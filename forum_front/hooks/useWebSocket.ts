@@ -41,8 +41,12 @@ export function useWebSocket({
 
     // API URL에서 /api 제거하고 WebSocket 엔드포인트 생성
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://forum.rjsgud.com/api'
-    const wsUrl = apiUrl.replace('/api', '')
-    const socketUrl = `${wsUrl}/ws`
+    // /api를 제거하고 기본 URL 사용
+    const baseUrl = apiUrl.replace('/api', '')
+    // SockJS는 상대 경로를 사용하므로 전체 URL 구성
+    const socketUrl = `${baseUrl}/ws`
+    
+    console.log('WebSocket 연결 시도:', socketUrl)
 
     const client = new Client({
       webSocketFactory: () => {

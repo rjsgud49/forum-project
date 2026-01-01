@@ -46,8 +46,9 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // JWT 필터 추가
                 .addFilterBefore(new JwtAuthenticationFilter(tokenProvider, userDetailsService), UsernamePasswordAuthenticationFilter.class)
-                // 모든 요청 허용
+                // WebSocket 경로 명시적으로 허용
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/ws/**", "/ws").permitAll() // WebSocket 엔드포인트 허용
                         .anyRequest().permitAll()
                 );
 
