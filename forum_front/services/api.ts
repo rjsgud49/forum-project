@@ -271,9 +271,13 @@ export const postApi = {
     return response.data
   },
   
-  getGroupPostList: async (groupId: number, page: number = 0, size: number = 10, sortType: string = 'RESENT'): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
+  getGroupPostList: async (groupId: number, page: number = 0, size: number = 10, sortType: string = 'RESENT', isPublic?: boolean): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
+    const params: any = { page, size, sortType }
+    if (isPublic !== undefined) {
+      params.isPublic = isPublic
+    }
     const response = await apiClient.get<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>>(`/post/group/${groupId}`, {
-      params: { page, size, sortType },
+      params,
     })
     return response.data
   },
@@ -505,9 +509,13 @@ export const userPostApi = {
     return response.data
   },
   
-  getGroupPostList: async (groupId: number, page: number = 0, size: number = 10, sortType: string = 'RESENT'): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
+  getGroupPostList: async (groupId: number, page: number = 0, size: number = 10, sortType: string = 'RESENT', isPublic?: boolean): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
+    const params: any = { page, size, sortType }
+    if (isPublic !== undefined) {
+      params.isPublic = isPublic
+    }
     const response = await apiClient.get<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>>(`/post/group/${groupId}`, {
-      params: { page, size, sortType },
+      params,
     })
     return response.data
   },

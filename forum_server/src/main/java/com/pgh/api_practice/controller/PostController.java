@@ -133,14 +133,15 @@ public class PostController {
     }
     
     /** ✅ 모임별 게시글 목록 조회 */
-    // GET http://localhost:8081/post/group/{groupId}?sortType=RESENT
+    // GET http://localhost:8081/post/group/{groupId}?sortType=RESENT&isPublic=true
     @GetMapping("/group/{groupId}")
     public ResponseEntity<ApiResponse<Page<PostListDTO>>> getGroupPostList(
             @PathVariable Long groupId,
             Pageable pageable,
-            @RequestParam(defaultValue = "RESENT") String sortType
+            @RequestParam(defaultValue = "RESENT") String sortType,
+            @RequestParam(required = false) Boolean isPublic
     ) {
-        Page<PostListDTO> list = postService.getGroupPostList(groupId, pageable, sortType);
+        Page<PostListDTO> list = postService.getGroupPostList(groupId, pageable, sortType, isPublic);
         return ResponseEntity.ok(ApiResponse.ok(list, "모임 게시글 조회 성공"));
     }
 }

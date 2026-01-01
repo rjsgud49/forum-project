@@ -676,26 +676,74 @@ public class PostService {
     
     /** ✅ 모임별 게시글 목록 조회 */
     @Transactional(readOnly = true)
-    public Page<PostListDTO> getGroupPostList(Long groupId, Pageable pageable, String sortType) {
+    public Page<PostListDTO> getGroupPostList(Long groupId, Pageable pageable, String sortType, Boolean isPublicFilter) {
         // 모임 존재 확인
-        if (!groupRepository.findByIdAndIsDeletedFalse(groupId).isPresent()) {
+        Optional<Group> groupOpt = groupRepository.findByIdAndIsDeletedFalse(groupId);
+        if (!groupOpt.isPresent()) {
             throw new ResourceNotFoundException("모임을 찾을 수 없습니다.");
         }
+        Group group = groupOpt.get();
         
-        // 1. posts 테이블에서 group_id로 조회
-        Page<Post> postsFromPostsTable;
-        if ("RESENT".equalsIgnoreCase(sortType)) {
-            postsFromPostsTable = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
-        } else if ("HITS".equalsIgnoreCase(sortType)) {
-            postsFromPostsTable = postRepository.findByGroupIdOrderByViewsDesc(groupId, pageable);
-        } else if ("LIKES".equalsIgnoreCase(sortType)) {
-            postsFromPostsTable = postRepository.findByGroupIdOrderByLikesDesc(groupId, pageable);
-        } else {
-            postsFromPostsTable = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
+        // 현재 사용자 확인 (인증되지 않은 경우 null)
+        Users currentUser = null;
+        boolean isMember = false;
+        try {
+            var authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.getName() != null && !"anonymousUser".equals(authentication.getName())) {
+                currentUser = userRepository.findByUsername(authentication.getName()).orElse(null);
+                if (currentUser != null) {
+                    // 모임 주인 확인
+                    if (group.getOwner().getId().equals(currentUser.getId())) {
+                        isMember = true;
+                    } else {
+                        // 모임 멤버 확인
+                        isMember = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId()).isPresent();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // 인증되지 않은 사용자
         }
         
-        // 2. group_posts 테이블에서 조회
-        Page<GroupPost> groupPosts = groupPostRepository.findByGroupIdAndIsDeletedFalseOrderByCreatedTimeDesc(groupId, pageable);
+        // 비멤버인 경우 공개 게시글만 조회
+        boolean filterPublicOnly = !isMember;
+        if (filterPublicOnly) {
+            isPublicFilter = true; // 비멤버는 항상 공개 게시글만
+        }
+        
+        // 1. posts 테이블에서 group_id로 조회 (isPublic 필터링 적용)
+        Page<Post> postsFromPostsTable;
+        if (isPublicFilter != null) {
+            // 공개/비공개 필터링
+            if ("RESENT".equalsIgnoreCase(sortType)) {
+                postsFromPostsTable = postRepository.findByGroupIdAndIsPublicOrderByCreatedTimeDesc(groupId, isPublicFilter, pageable);
+            } else if ("HITS".equalsIgnoreCase(sortType)) {
+                postsFromPostsTable = postRepository.findByGroupIdAndIsPublicOrderByViewsDesc(groupId, isPublicFilter, pageable);
+            } else if ("LIKES".equalsIgnoreCase(sortType)) {
+                postsFromPostsTable = postRepository.findByGroupIdAndIsPublicOrderByLikesDesc(groupId, isPublicFilter, pageable);
+            } else {
+                postsFromPostsTable = postRepository.findByGroupIdAndIsPublicOrderByCreatedTimeDesc(groupId, isPublicFilter, pageable);
+            }
+        } else {
+            // 필터링 없이 모든 게시글 조회 (멤버만)
+            if ("RESENT".equalsIgnoreCase(sortType)) {
+                postsFromPostsTable = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
+            } else if ("HITS".equalsIgnoreCase(sortType)) {
+                postsFromPostsTable = postRepository.findByGroupIdOrderByViewsDesc(groupId, pageable);
+            } else if ("LIKES".equalsIgnoreCase(sortType)) {
+                postsFromPostsTable = postRepository.findByGroupIdOrderByLikesDesc(groupId, pageable);
+            } else {
+                postsFromPostsTable = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
+            }
+        }
+        
+        // 2. group_posts 테이블에서 조회 (isPublic 필터링 적용)
+        Page<GroupPost> groupPosts;
+        if (isPublicFilter != null) {
+            groupPosts = groupPostRepository.findByGroupIdAndIsPublicAndIsDeletedFalseOrderByCreatedTimeDesc(groupId, isPublicFilter, pageable);
+        } else {
+            groupPosts = groupPostRepository.findByGroupIdAndIsDeletedFalseOrderByCreatedTimeDesc(groupId, pageable);
+        }
         
         // 3. 두 결과를 합쳐서 PostListDTO로 변환
         List<PostListDTO> allPosts = new ArrayList<>();

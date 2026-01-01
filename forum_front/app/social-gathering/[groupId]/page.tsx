@@ -33,6 +33,8 @@ export default function GroupDetailPage() {
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [editProfileImageUrl, setEditProfileImageUrl] = useState('')
+  const [sortType, setSortType] = useState<'RESENT' | 'HITS' | 'LIKES'>('RESENT')
+  const [isPublicFilter, setIsPublicFilter] = useState<boolean | undefined>(undefined) // undefined: 전체, true: 공개만, false: 비공개만
 
   useEffect(() => {
     if (groupId) {
@@ -47,7 +49,7 @@ export default function GroupDetailPage() {
     } else if (activeTab === 'manage' && groupId) {
       fetchMembers()
     }
-  }, [activeTab, groupId])
+  }, [activeTab, groupId, sortType, isPublicFilter])
 
   useEffect(() => {
     if (group) {
@@ -99,9 +101,9 @@ export default function GroupDetailPage() {
   const fetchPosts = async () => {
     try {
       setPostsLoading(true)
-      console.log('모임 게시글 조회 시작, groupId:', groupId)
-      // 모임별 게시글 API 사용
-      const response = await postApi.getGroupPostList(groupId, 0, 20, 'RESENT')
+      console.log('모임 게시글 조회 시작, groupId:', groupId, 'sortType:', sortType, 'isPublic:', isPublicFilter)
+      // 모임별 게시글 API 사용 (isPublic 필터는 멤버인 경우에만 적용)
+      const response = await postApi.getGroupPostList(groupId, 0, 20, sortType, group?.isMember ? isPublicFilter : undefined)
       console.log('모임 게시글 API 응답:', response)
       if (response.success && response.data) {
         const content = response.data.content || []
@@ -365,6 +367,82 @@ export default function GroupDetailPage() {
                 </button>
               )}
             </div>
+            
+            {/* 필터링 UI */}
+            <div className="mb-6 flex flex-wrap gap-4 items-center">
+              {/* 정렬 필터 */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">정렬:</span>
+                <button
+                  onClick={() => setSortType('RESENT')}
+                  className={`px-3 py-1 text-sm rounded transition ${
+                    sortType === 'RESENT'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  최신순
+                </button>
+                <button
+                  onClick={() => setSortType('HITS')}
+                  className={`px-3 py-1 text-sm rounded transition ${
+                    sortType === 'HITS'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  조회수순
+                </button>
+                <button
+                  onClick={() => setSortType('LIKES')}
+                  className={`px-3 py-1 text-sm rounded transition ${
+                    sortType === 'LIKES'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  좋아요순
+                </button>
+              </div>
+              
+              {/* 공개/비공개 필터 (멤버만) */}
+              {group.isMember && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700">공개 범위:</span>
+                  <button
+                    onClick={() => setIsPublicFilter(undefined)}
+                    className={`px-3 py-1 text-sm rounded transition ${
+                      isPublicFilter === undefined
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    전체
+                  </button>
+                  <button
+                    onClick={() => setIsPublicFilter(true)}
+                    className={`px-3 py-1 text-sm rounded transition ${
+                      isPublicFilter === true
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    외부 공개
+                  </button>
+                  <button
+                    onClick={() => setIsPublicFilter(false)}
+                    className={`px-3 py-1 text-sm rounded transition ${
+                      isPublicFilter === false
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    모임 전용
+                  </button>
+                </div>
+              )}
+            </div>
+            
             {postsLoading ? (
               <div className="text-center text-gray-500 py-12">로딩 중...</div>
             ) : posts.length === 0 ? (
