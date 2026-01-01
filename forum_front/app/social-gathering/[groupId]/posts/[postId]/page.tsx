@@ -58,12 +58,12 @@ export default function GroupPostDetailPage() {
         const currentUsername = isAuthenticated ? getUsernameFromToken() : null
         const isAuthor = currentUsername === postData.username
         const convertedPost: GroupPostDetailDTO = {
-          id: postData.id,
+          id: postData.id || postId,  // postData.id가 없으면 postId 사용
           title: postData.title,
           body: postData.body,
           username: postData.username,
           nickname: postData.nickname || postData.username,
-          Views: String(postData.views || 0),
+          Views: String(postData.views || postData.Views || 0),
           createDateTime: postData.createDateTime,
           updateDateTime: postData.updateDateTime,
           profileImageUrl: postData.profileImageUrl,

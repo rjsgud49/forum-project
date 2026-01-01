@@ -41,6 +41,7 @@ export interface PostListDTO {
 }
 
 export interface PostDetailDTO {
+  id?: number  // 게시글 ID (선택적)
   title: string
   body: string
   username: string
@@ -55,6 +56,8 @@ export interface PostDetailDTO {
   groupId?: number  // 모임 ID
   groupName?: string  // 모임 이름
   isPublic?: boolean  // 모임 외부 노출 여부
+  canEdit?: boolean  // 수정 권한
+  canDelete?: boolean  // 삭제 권한
 }
 
 export interface CreatePost {
