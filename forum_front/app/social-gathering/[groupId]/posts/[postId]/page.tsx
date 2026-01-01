@@ -54,6 +54,8 @@ export default function GroupPostDetailPage() {
       if (postResponse.success && postResponse.data) {
         // PostDetailDTO를 GroupPostDetailDTO 형식으로 변환
         const postData = postResponse.data
+        const currentUsername = isAuthenticated ? getUsernameFromToken() : null
+        const isAuthor = currentUsername === postData.username
         const convertedPost: GroupPostDetailDTO = {
           id: postData.id,
           title: postData.title,
@@ -64,8 +66,9 @@ export default function GroupPostDetailPage() {
           createDateTime: postData.createDateTime,
           updateDateTime: postData.updateDateTime,
           profileImageUrl: postData.profileImageUrl,
-          canEdit: postData.canEdit,
-          canDelete: postData.canDelete,
+          isAuthor: isAuthor,
+          canEdit: postData.canEdit || false,
+          canDelete: postData.canDelete || false,
           isPublic: postData.isPublic,
         }
         setPost(convertedPost)
