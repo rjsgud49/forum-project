@@ -315,17 +315,13 @@ export default function GroupDetailPage() {
             <div className="flex gap-2">
               {group.isMember ? (
                 // 모임 주인은 탈퇴 버튼을 표시하지 않음
-                group.ownerUsername !== currentUsername ? (
+                group.ownerUsername !== currentUsername && (
                   <button
                     onClick={handleLeave}
                     className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition"
                   >
                     탈퇴하기
                   </button>
-                ) : (
-                  <span className="text-sm text-gray-500 px-4 py-2 inline-flex items-center">
-                    모임 주인은 탈퇴할 수 없습니다
-                  </span>
                 )
               ) : (
                 <button
