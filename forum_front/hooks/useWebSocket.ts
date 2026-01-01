@@ -23,6 +23,19 @@ export function useWebSocket({
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
   const clientRef = useRef<Client | null>(null)
   const typingTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
+  const subscriptionsRef = useRef<any[]>([])
+  
+  // 콜백 함수들을 ref로 저장하여 의존성 변경으로 인한 재연결 방지
+  const onMessageRef = useRef(onMessage)
+  const onTypingRef = useRef(onTyping)
+  const onReadRef = useRef(onRead)
+  
+  // 콜백 함수 업데이트
+  useEffect(() => {
+    onMessageRef.current = onMessage
+    onTypingRef.current = onTyping
+    onReadRef.current = onRead
+  }, [onMessage, onTyping, onRead])
 
   // 토큰 가져오기
   const getToken = useCallback(() => {
@@ -58,6 +71,8 @@ export function useWebSocket({
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
+      forceBinaryWS: false,
+      appendMissingNULL: false,
       debug: (str) => {
         // 개발 환경에서만 디버그 로그 출력
         if (process.env.NODE_ENV === 'development') {
@@ -70,8 +85,18 @@ export function useWebSocket({
         
         if (!clientRef.current) return
 
+        // 기존 구독 정리
+        subscriptionsRef.current.forEach(sub => {
+          try {
+            sub.unsubscribe()
+          } catch (e) {
+            console.warn('구독 해제 오류:', e)
+          }
+        })
+        subscriptionsRef.current = []
+
         // 채팅방 메시지 구독
-        const subscription = clientRef.current.subscribe(
+        const messageSubscription = clientRef.current.subscribe(
           `/topic/chat/${groupId}/${roomId}`,
           (message: IMessage) => {
             try {
@@ -80,7 +105,7 @@ export function useWebSocket({
               console.log('메시지 수신 (headers):', message.headers)
               const data = JSON.parse(message.body)
               console.log('파싱된 메시지 데이터:', data)
-              onMessage?.(data)
+              onMessageRef.current?.(data)
             } catch (error) {
               console.error('메시지 파싱 오류:', error, message.body)
             }
@@ -89,15 +114,16 @@ export function useWebSocket({
             // 구독 헤더 (필요시)
           }
         )
-        console.log('메시지 구독 완료:', `/topic/chat/${groupId}/${roomId}`, subscription)
+        subscriptionsRef.current.push(messageSubscription)
+        console.log('메시지 구독 완료:', `/topic/chat/${groupId}/${roomId}`, messageSubscription)
 
         // 타이핑 인디케이터 구독
-        clientRef.current.subscribe(
+        const typingSubscription = clientRef.current.subscribe(
           `/topic/chat/${groupId}/${roomId}/typing`,
           (message: IMessage) => {
             try {
               const data = JSON.parse(message.body)
-              onTyping?.(data)
+              onTypingRef.current?.(data)
               
               if (data.isTyping) {
                 setTypingUsers(prev => new Set(prev).add(data.username))
@@ -135,23 +161,27 @@ export function useWebSocket({
             }
           }
         )
+        subscriptionsRef.current.push(typingSubscription)
 
         // 읽음 표시 구독
-        clientRef.current.subscribe(
+        const readSubscription = clientRef.current.subscribe(
           `/topic/chat/${groupId}/${roomId}/read`,
           (message: IMessage) => {
             try {
               const data = JSON.parse(message.body)
-              onRead?.(data)
+              onReadRef.current?.(data)
             } catch (error) {
               console.error('읽음 데이터 파싱 오류:', error)
             }
           }
         )
+        subscriptionsRef.current.push(readSubscription)
       },
       onDisconnect: () => {
         setIsConnected(false)
         console.log('WebSocket 연결 종료')
+        // 구독 정리
+        subscriptionsRef.current = []
       },
       onStompError: (frame) => {
         console.error('STOMP 오류:', frame)
@@ -160,11 +190,13 @@ export function useWebSocket({
           headers: frame.headers,
           body: frame.body,
         })
-        setIsConnected(false)
+        // STOMP 오류 시에도 연결 상태는 유지하고 재연결 시도
+        // setIsConnected(false) 제거하여 자동 재연결 허용
       },
       onWebSocketError: (event) => {
         console.error('WebSocket 오류:', event)
-        setIsConnected(false)
+        // WebSocket 오류 시에도 재연결 시도
+        // setIsConnected(false) 제거하여 자동 재연결 허용
       },
     })
 
@@ -176,13 +208,27 @@ export function useWebSocket({
       typingTimeoutRef.current.forEach(timeout => clearTimeout(timeout))
       typingTimeoutRef.current.clear()
       
+      // 구독 정리
+      subscriptionsRef.current.forEach(sub => {
+        try {
+          sub.unsubscribe()
+        } catch (e) {
+          console.warn('구독 해제 오류:', e)
+        }
+      })
+      subscriptionsRef.current = []
+      
       // 연결 종료
       if (clientRef.current) {
-        clientRef.current.deactivate()
+        try {
+          clientRef.current.deactivate()
+        } catch (e) {
+          console.warn('WebSocket 연결 종료 오류:', e)
+        }
         clientRef.current = null
       }
     }
-  }, [groupId, roomId, onMessage, onTyping, onRead, enabled, getToken])
+  }, [groupId, roomId, enabled, getToken]) // 콜백 함수 의존성 제거
 
   const sendMessage = useCallback((message: string) => {
     if (!clientRef.current) {

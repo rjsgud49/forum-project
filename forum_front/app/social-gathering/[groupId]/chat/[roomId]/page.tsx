@@ -33,14 +33,23 @@ export default function ChatRoomPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const currentUsername = getUsernameFromToken()
+  const currentUsernameRef = useRef<string | null>(currentUsername)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const profileImageInputRef = useRef<HTMLInputElement>(null)
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(true)
   const [initialLoad, setInitialLoad] = useState(true)
+  const [isUserScrolling, setIsUserScrolling] = useState(false)
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: number; isMyMessage: boolean } | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null)
   const [editMessageText, setEditMessageText] = useState('')
   const [replyingTo, setReplyingTo] = useState<GroupChatMessageDTO | null>(null)
+  const pendingReplyRef = useRef<{ replyTo: GroupChatMessageDTO; messageText: string; timestamp: number } | null>(null) // 전송 중인 답장 정보
+  
+  // currentUsername 업데이트
+  useEffect(() => {
+    currentUsernameRef.current = currentUsername
+  }, [currentUsername])
   const [showMembers, setShowMembers] = useState(false)
   const [members, setMembers] = useState<GroupMemberDTO[]>([])
   const [messageReactions, setMessageReactions] = useState<Record<number, string[]>>({})
@@ -58,6 +67,8 @@ export default function ChatRoomPage() {
   const newRoomImageInputRef = useRef<HTMLInputElement>(null)
   const [myDisplayName, setMyDisplayName] = useState<string>('')
   const [updatingDisplayName, setUpdatingDisplayName] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<'room' | 'displayName'>('displayName')
 
   useEffect(() => {
     if (groupId) {
@@ -87,8 +98,79 @@ export default function ChatRoomPage() {
           return prev
         }
         console.log('새 메시지 추가:', message.id, message.message)
+        
+        // 답장 정보 처리
+        let messageWithReply = message
+        
+        // 1. 백엔드에서 답장 정보가 있는 경우
+        if (message.replyToMessageId && !message.replyToMessage) {
+          const repliedMessage = prev.find(m => m.id === message.replyToMessageId)
+          if (repliedMessage) {
+            messageWithReply = {
+              ...message,
+              replyToMessage: {
+                id: repliedMessage.id,
+                message: repliedMessage.message,
+                username: repliedMessage.username,
+                nickname: repliedMessage.nickname,
+                displayName: repliedMessage.displayName,
+                profileImageUrl: repliedMessage.profileImageUrl,
+              }
+            }
+          }
+        }
+        
+        // 2. 프론트엔드에서 답장 정보 추가 (방금 보낸 메시지이고 답장 중이었다면)
+        if (!messageWithReply.replyToMessageId && pendingReplyRef.current && message.username === currentUsernameRef.current) {
+          console.log('답장 정보 매칭 시도:', { 
+            messageUsername: message.username, 
+            currentUsername: currentUsernameRef.current,
+            pendingReply: pendingReplyRef.current 
+          })
+          
+          // 메시지 내용과 시간을 비교하여 매칭
+          const messageTime = new Date(message.createdTime).getTime()
+          const timeDiff = Math.abs(messageTime - pendingReplyRef.current.timestamp)
+          const messageMatches = message.message.trim() === pendingReplyRef.current.messageText.trim()
+          
+          console.log('답장 정보 매칭 조건 확인:', { 
+            messageText: message.message.trim(), 
+            pendingText: pendingReplyRef.current.messageText.trim(), 
+            messageMatches, 
+            timeDiff,
+            timeDiffOk: timeDiff < 10000
+          })
+          
+          // 메시지 내용이 일치하고 시간이 10초 이내이면 답장 정보 추가
+          if (messageMatches && timeDiff < 10000) {
+            console.log('답장 정보 매칭 성공! 답장 정보 추가')
+            messageWithReply = {
+              ...messageWithReply,
+              replyToMessageId: pendingReplyRef.current.replyTo.id,
+              replyToMessage: {
+                id: pendingReplyRef.current.replyTo.id,
+                message: pendingReplyRef.current.replyTo.message,
+                username: pendingReplyRef.current.replyTo.username,
+                nickname: pendingReplyRef.current.replyTo.nickname,
+                displayName: pendingReplyRef.current.replyTo.displayName,
+                profileImageUrl: pendingReplyRef.current.replyTo.profileImageUrl,
+              }
+            }
+            // 답장 정보 사용 후 초기화
+            pendingReplyRef.current = null
+          } else {
+            console.log('답장 정보 매칭 실패:', { 
+              messageText: message.message.trim(), 
+              pendingText: pendingReplyRef.current.messageText.trim(), 
+              messageMatches, 
+              timeDiff,
+              reason: !messageMatches ? '메시지 내용 불일치' : '시간 초과'
+            })
+          }
+        }
+        
         // 시간순으로 정렬
-        const newMessages = [...prev, message].sort((a, b) => 
+        const newMessages = [...prev, messageWithReply].sort((a, b) => 
           new Date(a.createdTime).getTime() - new Date(b.createdTime).getTime()
         )
         console.log('메시지 목록 업데이트 완료, 총 메시지 수:', newMessages.length)
@@ -153,8 +235,20 @@ export default function ChatRoomPage() {
   const checkScrollPosition = useCallback(() => {
     if (messagesContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100 // 100px 여유
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+      const isAtBottom = distanceFromBottom < 50 // 50px 여유로 줄임
       setIsScrolledToBottom(isAtBottom)
+      
+      // 사용자가 스크롤 중임을 표시
+      setIsUserScrolling(true)
+      
+      // 스크롤이 멈춘 후 200ms 후에 사용자 스크롤 상태 해제
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+      }
+      scrollTimeoutRef.current = setTimeout(() => {
+        setIsUserScrolling(false)
+      }, 200)
     }
   }, [])
 
@@ -162,8 +256,27 @@ export default function ChatRoomPage() {
   useEffect(() => {
     const container = messagesContainerRef.current
     if (container) {
-      container.addEventListener('scroll', checkScrollPosition)
-      return () => container.removeEventListener('scroll', checkScrollPosition)
+      // 스크롤 이벤트에 디바운싱 적용
+      let scrollTimeout: NodeJS.Timeout | null = null
+      const handleScroll = () => {
+        if (scrollTimeout) {
+          clearTimeout(scrollTimeout)
+        }
+        scrollTimeout = setTimeout(() => {
+          checkScrollPosition()
+        }, 50) // 50ms 디바운싱
+      }
+      
+      container.addEventListener('scroll', handleScroll, { passive: true })
+      return () => {
+        container.removeEventListener('scroll', handleScroll)
+        if (scrollTimeout) {
+          clearTimeout(scrollTimeout)
+        }
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current)
+        }
+      }
     }
   }, [checkScrollPosition])
 
@@ -175,13 +288,28 @@ export default function ChatRoomPage() {
       return
     }
     
-    if (isScrolledToBottom) {
-      scrollToBottom()
+    // 사용자가 스크롤 중이 아니고 하단에 있을 때만 자동 스크롤
+    if (isScrolledToBottom && !isUserScrolling) {
+      // 약간의 지연을 두어 스크롤 버벅임 방지
+      const timeoutId = setTimeout(() => {
+        if (messagesContainerRef.current && !isUserScrolling) {
+          const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current
+          const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+          // 여전히 하단 근처에 있으면 스크롤
+          if (distanceFromBottom < 100) {
+            scrollToBottom()
+          }
+        }
+      }, 100)
+      return () => clearTimeout(timeoutId)
     }
-  }, [messages, isScrolledToBottom, initialLoad])
+  }, [messages, isScrolledToBottom, initialLoad, isUserScrolling])
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesContainerRef.current && messagesEndRef.current) {
+      // 즉시 스크롤하여 버벅임 방지
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
   }
 
   const fetchMessages = async () => {
@@ -250,6 +378,14 @@ export default function ChatRoomPage() {
     }
   }, [groupId, showMembers])
 
+  // 채팅방 로드 시 내 별명 조회
+  useEffect(() => {
+    if (groupId && isAuthenticated) {
+      fetchMembers()
+    }
+  }, [groupId, roomId, isAuthenticated])
+
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -288,30 +424,70 @@ export default function ChatRoomPage() {
 
     try {
       setSending(true)
-      console.log('메시지 전송 시도:', { groupId, roomId, message: newMessage, isConnected })
-      const success = wsSendMessage(newMessage)
+      // @username으로 시작하는 부분 제거
+      let messageToSend = newMessage.trim()
+      if (replyingTo && messageToSend.startsWith('@')) {
+        // @username 부분 제거
+        const replyPrefix = `@${replyingTo.displayName || replyingTo.nickname} `
+        if (messageToSend.startsWith(replyPrefix)) {
+          messageToSend = messageToSend.substring(replyPrefix.length).trim()
+        } else {
+          // 다른 형식의 @username 제거
+          messageToSend = messageToSend.replace(/^@\w+\s*/, '').trim()
+        }
+      }
+      console.log('메시지 전송 시도:', { groupId, roomId, message: messageToSend, isConnected, replyingTo })
+      const success = wsSendMessage(messageToSend)
       console.log('메시지 전송 결과:', success)
       
       if (success) {
         console.log('WebSocket으로 메시지 전송 성공')
+        // 답장 정보를 ref에 저장 (메시지 수신 시 사용)
+        const replyInfo = replyingTo ? {
+          replyTo: replyingTo,
+          messageText: messageToSend,
+          timestamp: Date.now()
+        } : null
+        
+        if (replyInfo) {
+          pendingReplyRef.current = replyInfo
+          console.log('답장 정보 저장:', { replyToId: replyInfo.replyTo.id, messageText: messageToSend })
+        }
+        
+        // 메시지 전송 성공 시 입력 필드와 답장 정보 초기화
         setNewMessage('')
-        setReplyingTo(null) // 답글 초기화
+        setReplyingTo(null)
         stopTyping()
         if (typingTimeoutRef.current) {
           clearTimeout(typingTimeoutRef.current)
           typingTimeoutRef.current = null
         }
+        
+        // 10초 후 pendingReplyRef 초기화 (타임아웃)
+        if (replyInfo) {
+          setTimeout(() => {
+            if (pendingReplyRef.current && pendingReplyRef.current.timestamp === replyInfo.timestamp) {
+              console.log('답장 정보 타임아웃으로 초기화')
+              pendingReplyRef.current = null
+            }
+          }, 10000)
+        }
       } else {
         console.warn('WebSocket 전송 실패, REST API로 폴백')
         // WebSocket 연결 실패 시 REST API로 폴백
-        const response = await groupApi.sendChatMessage(groupId, roomId, { message: newMessage })
-        if (response.success) {
-          setNewMessage('')
-          setReplyingTo(null) // 답글 초기화
-          // REST API로 전송한 경우 메시지 목록 새로고침
-          setTimeout(() => {
-            fetchMessages()
-          }, 500)
+        try {
+          const response = await groupApi.sendChatMessage(groupId, roomId, { message: messageToSend })
+          if (response.success) {
+            setNewMessage('')
+            setReplyingTo(null) // 답글 초기화
+            // REST API로 전송한 경우 메시지 목록 새로고침
+            setTimeout(() => {
+              fetchMessages()
+            }, 500)
+          }
+        } catch (error: any) {
+          console.error('REST API 메시지 전송 실패:', error)
+          alert(error.response?.data?.message || '메시지 전송에 실패했습니다.')
         }
       }
     } catch (error: any) {
@@ -436,9 +612,18 @@ export default function ChatRoomPage() {
   const handleReplyMessage = (messageId: number) => {
     const message = messages.find(m => m.id === messageId)
     if (message) {
+      console.log('답장 설정:', message)
       setReplyingTo(message)
-      setNewMessage(`@${message.displayName || message.nickname} `)
+      // @username을 입력 필드에 넣지 않음
+      setNewMessage('')
       closeContextMenu()
+      // 입력 필드로 포커스 이동
+      setTimeout(() => {
+        const input = document.querySelector('input[type="text"]') as HTMLInputElement
+        if (input) {
+          input.focus()
+        }
+      }, 100)
     }
   }
 
@@ -504,7 +689,6 @@ export default function ChatRoomPage() {
     if (currentRoom) {
       setEditRoomName(currentRoom.name)
       setEditRoomDescription(currentRoom.description || '')
-      setEditingRoom(true)
     }
   }
 
@@ -636,6 +820,13 @@ export default function ChatRoomPage() {
   }
 
   const currentRoom = chatRooms.find((room) => room.id === roomId)
+
+  // 설정 모달 열 때 채팅방 정보 로드
+  useEffect(() => {
+    if (showSettingsModal && currentRoom) {
+      handleStartEditRoom()
+    }
+  }, [showSettingsModal, currentRoom])
 
   if (loading) {
     return (
@@ -777,111 +968,41 @@ export default function ChatRoomPage() {
                     />
                   </div>
                   <div className="flex-1">
-                    {editingRoom ? (
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          value={editRoomName}
-                          onChange={(e) => setEditRoomName(e.target.value)}
-                          placeholder="채팅방 이름"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                          disabled={updatingRoom || deletingRoom}
-                        />
-                        <textarea
-                          value={editRoomDescription}
-                          onChange={(e) => setEditRoomDescription(e.target.value)}
-                          placeholder="채팅방 설명 (선택사항)"
-                          rows={2}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                          disabled={updatingRoom || deletingRoom}
-                        />
-                        <div className="flex gap-2 justify-between">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={handleUpdateRoom}
-                              disabled={updatingRoom || deletingRoom || !editRoomName.trim() || editRoomName.length < 2}
-                              className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {updatingRoom ? '저장 중...' : '저장'}
-                            </button>
-                            <button
-                              onClick={handleCancelEditRoom}
-                              disabled={updatingRoom || deletingRoom}
-                              className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded text-sm transition disabled:opacity-50"
-                            >
-                              취소
-                            </button>
-                          </div>
-                          <button
-                            onClick={handleDeleteRoom}
-                            disabled={updatingRoom || deletingRoom}
-                            className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {deletingRoom ? '삭제 중...' : '채팅방 삭제'}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold text-gray-800">
-                              {currentRoom.name}
-                            </h3>
-                            {currentRoom.isAdminRoom && (
-                              <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
-                                관리자 전용
-                              </span>
-                            )}
-                            {group?.isAdmin && (
-                              <button
-                                onClick={handleStartEditRoom}
-                                className="text-gray-400 hover:text-gray-600 transition"
-                                title="채팅방 설정"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        {currentRoom.description && (
-                          <p className="text-sm text-gray-500 mt-0.5">
-                            {currentRoom.description}
-                          </p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-gray-800">
+                          {currentRoom.name}
+                        </h3>
+                        {currentRoom.isAdminRoom && (
+                          <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                            관리자 전용
+                          </span>
                         )}
-                        {/* 내 별명 설정 */}
                         {isAuthenticated && (
-                          <div className="mt-3 pt-3 border-t border-gray-200">
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              내 별명 (이 채팅방에서만 표시)
-                            </label>
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={myDisplayName}
-                                onChange={(e) => setMyDisplayName(e.target.value)}
-                                placeholder="별명을 입력하세요 (선택사항)"
-                                maxLength={30}
-                                className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                disabled={updatingDisplayName}
-                              />
-                              <button
-                                onClick={handleUpdateDisplayName}
-                                disabled={updatingDisplayName}
-                                className="px-3 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition disabled:opacity-50"
-                              >
-                                {updatingDisplayName ? '저장 중...' : '저장'}
-                              </button>
-                            </div>
-                            <p className="mt-1 text-xs text-gray-500">
-                              {myDisplayName.length}/30 (비워두면 기본 닉네임이 표시됩니다)
-                            </p>
-                          </div>
+                          <button
+                            onClick={() => {
+                              setShowSettingsModal(true)
+                              if (group?.isAdmin) {
+                                setSettingsTab('room')
+                              } else {
+                                setSettingsTab('displayName')
+                              }
+                            }}
+                            className="text-gray-400 hover:text-gray-600 transition"
+                            title="설정"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                          </button>
                         )}
-                      </>
+                      </div>
+                    </div>
+                    {currentRoom.description && (
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        {currentRoom.description}
+                      </p>
                     )}
                   </div>
                   {/* 멤버 수 표시 및 멤버 목록 버튼 */}
@@ -925,6 +1046,7 @@ export default function ChatRoomPage() {
                     return (
                       <div
                         key={message.id}
+                        data-message-id={message.id}
                         className={`flex gap-3 ${isMyMessage ? 'flex-row-reverse' : ''} ${
                           isNewMessage ? 'animate-slide-in' : ''
                         }`}
@@ -943,114 +1065,158 @@ export default function ChatRoomPage() {
                             </div>
                           )}
                         </div>
-                        <div className={`flex-1 ${isMyMessage ? 'flex flex-col items-end' : ''}`}>
-                          <div className={`flex items-baseline gap-2 mb-1 ${isMyMessage ? 'flex-row-reverse' : ''}`}>
-                            <div className="flex items-center gap-1">
-                              <span className="font-semibold text-sm text-gray-800">
-                                {message.displayName || message.nickname}
-                              </span>
-                              {message.isAdmin && (
-                                <svg
-                                  className="w-4 h-4 text-yellow-500"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <title>관리자</title>
-                                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                </svg>
-                              )}
-                              {isMyMessage && <span className="text-blue-500 ml-1 text-xs">(나)</span>}
-                            </div>
-                            <span className="text-xs text-gray-500">
-                              {format(new Date(message.createdTime), 'HH:mm', { locale: ko })}
-                            </span>
-                          </div>
-                          <div className="flex items-end gap-2">
-                            {editingMessageId === message.id ? (
-                              <div className="flex-1">
-                                <input
-                                  type="text"
-                                  value={editMessageText}
-                                  onChange={(e) => setEditMessageText(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                      e.preventDefault()
-                                      handleSaveEditMessage(message.id)
-                                    } else if (e.key === 'Escape') {
-                                      handleCancelEditMessage()
-                                    }
-                                  }}
-                                  className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                  autoFocus
-                                />
-                                <div className="flex gap-2 mt-2">
-                                  <button
-                                    onClick={() => handleSaveEditMessage(message.id)}
-                                    className="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+                          <div className={`flex-1 ${isMyMessage ? 'flex flex-col items-end' : ''}`}>
+                            <div className={`flex items-baseline gap-2 mb-1 ${isMyMessage ? 'flex-row-reverse' : ''}`}>
+                              <div className="flex items-center gap-1">
+                                <span className="font-semibold text-sm text-gray-800">
+                                  {message.displayName || message.nickname}
+                                </span>
+                                {message.isAdmin && (
+                                  <svg
+                                    className="w-4 h-4 text-yellow-500"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20"
                                   >
-                                    저장
-                                  </button>
-                                  <button
-                                    onClick={handleCancelEditMessage}
-                                    className="px-3 py-1 bg-gray-200 text-gray-800 rounded text-xs hover:bg-gray-300"
-                                  >
-                                    취소
-                                  </button>
-                                </div>
+                                    <title>관리자</title>
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                  </svg>
+                                )}
+                                {isMyMessage && <span className="text-blue-500 ml-1 text-xs">(나)</span>}
                               </div>
-                            ) : (
-                              <>
-                                <div className="flex flex-col gap-1">
-                                  <div
-                                    className={`rounded-lg px-4 py-2 inline-block max-w-md relative group ${
-                                      isMyMessage
-                                        ? 'bg-blue-500 text-white'
-                                        : 'bg-white text-gray-900 border border-gray-200'
-                                    }`}
-                                  >
-                                    <p className="text-sm whitespace-pre-wrap break-words">
-                                      {message.message}
-                                    </p>
-                                    {/* 반응 표시 */}
-                                    {messageReactions[message.id] && messageReactions[message.id].length > 0 && (
-                                      <div className="flex gap-1 mt-2 flex-wrap">
-                                        {Array.from(new Set(messageReactions[message.id])).map((emoji, idx) => (
+                              <span className="text-xs text-gray-500">
+                                {format(new Date(message.createdTime), 'HH:mm', { locale: ko })}
+                              </span>
+                            </div>
+                            <div className={`flex items-end gap-2 ${isMyMessage ? 'flex-row-reverse' : ''}`}>
+                              {editingMessageId === message.id ? (
+                                <div className="flex-1">
+                                  <input
+                                    type="text"
+                                    value={editMessageText}
+                                    onChange={(e) => setEditMessageText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault()
+                                        handleSaveEditMessage(message.id)
+                                      } else if (e.key === 'Escape') {
+                                        handleCancelEditMessage()
+                                      }
+                                    }}
+                                    className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-2 mt-2">
+                                    <button
+                                      onClick={() => handleSaveEditMessage(message.id)}
+                                      className="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+                                    >
+                                      저장
+                                    </button>
+                                    <button
+                                      onClick={handleCancelEditMessage}
+                                      className="px-3 py-1 bg-gray-200 text-gray-800 rounded text-xs hover:bg-gray-300"
+                                    >
+                                      취소
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex flex-col gap-1">
+                                    {/* 답장된 메시지 표시 */}
+                                    {message.replyToMessageId && message.replyToMessage && (
+                                      <div 
+                                        className={`flex items-center gap-2 mb-1 px-2 py-1 rounded border-l-4 cursor-pointer hover:opacity-80 transition ${isMyMessage ? 'bg-blue-400 bg-opacity-20 border-blue-300' : 'bg-gray-100 border-gray-300'}`}
+                                        onClick={() => {
+                                          // 답장된 메시지로 스크롤
+                                          const repliedElement = document.querySelector(`[data-message-id="${message.replyToMessageId}"]`)
+                                          if (repliedElement) {
+                                            repliedElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                            // 하이라이트 효과
+                                            repliedElement.classList.add('ring-2', 'ring-blue-500')
+                                            setTimeout(() => {
+                                              repliedElement.classList.remove('ring-2', 'ring-blue-500')
+                                            }, 2000)
+                                          }
+                                        }}
+                                      >
+                                        <div className="flex-shrink-0">
+                                          {message.replyToMessage.profileImageUrl ? (
+                                            <img
+                                              src={message.replyToMessage.profileImageUrl}
+                                              alt={message.replyToMessage.nickname}
+                                              className="w-5 h-5 rounded-full object-cover"
+                                            />
+                                          ) : (
+                                            <div className="w-5 h-5 rounded-full bg-gray-300 flex items-center justify-center">
+                                              <span className="text-[10px] text-gray-600 font-semibold">
+                                                {(message.replyToMessage.displayName || message.replyToMessage.nickname).charAt(0).toUpperCase()}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1 min-w-0 flex-1">
+                                          <span className={`text-xs font-medium truncate ${isMyMessage ? 'text-blue-50' : 'text-gray-700'}`}>
+                                            {message.replyToMessage.displayName || message.replyToMessage.nickname}
+                                          </span>
+                                          <span className={`text-xs truncate ${isMyMessage ? 'text-blue-100' : 'text-gray-500'}`}>
+                                            {message.replyToMessage.message.length > 50 
+                                              ? message.replyToMessage.message.substring(0, 50) + '...'
+                                              : message.replyToMessage.message}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div
+                                      className={`rounded-lg px-4 py-2 inline-block max-w-md w-fit relative group ${
+                                        isMyMessage
+                                          ? 'bg-blue-500 text-white'
+                                          : 'bg-white text-gray-900 border border-gray-200'
+                                      }`}
+                                    >
+                                      <p className="text-sm whitespace-pre-wrap break-words">
+                                        {message.message}
+                                      </p>
+                                      {/* 반응 표시 */}
+                                      {messageReactions[message.id] && messageReactions[message.id].length > 0 && (
+                                        <div className="flex gap-1 mt-2 flex-wrap">
+                                          {Array.from(new Set(messageReactions[message.id])).map((emoji, idx) => (
+                                            <button
+                                              key={idx}
+                                              onClick={() => handleAddReaction(message.id, emoji)}
+                                              className="px-2 py-1 bg-black bg-opacity-20 rounded-full text-xs hover:bg-opacity-30 transition"
+                                            >
+                                              {emoji} {messageReactions[message.id].filter(e => e === emoji).length}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {/* 반응 추가 버튼 (호버 시) */}
+                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                                      <div className="flex gap-1">
+                                        {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
                                           <button
-                                            key={idx}
+                                            key={emoji}
                                             onClick={() => handleAddReaction(message.id, emoji)}
-                                            className="px-2 py-1 bg-black bg-opacity-20 rounded-full text-xs hover:bg-opacity-30 transition"
+                                            className="text-lg hover:scale-125 transition-transform px-1"
+                                            title={emoji}
                                           >
-                                            {emoji} {messageReactions[message.id].filter(e => e === emoji).length}
+                                            {emoji}
                                           </button>
                                         ))}
                                       </div>
-                                    )}
-                                  </div>
-                                  {/* 반응 추가 버튼 (호버 시) */}
-                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                                    <div className="flex gap-1">
-                                      {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
-                                        <button
-                                          key={emoji}
-                                          onClick={() => handleAddReaction(message.id, emoji)}
-                                          className="text-lg hover:scale-125 transition-transform px-1"
-                                          title={emoji}
-                                        >
-                                          {emoji}
-                                        </button>
-                                      ))}
                                     </div>
                                   </div>
-                                  {/* 읽음 표시 - 메시지 박스 옆에 표시 */}
-                                  {isMyMessage && message.readCount !== undefined && message.readCount > 0 && (
-                                    <span className="text-xs text-gray-400 mb-1">
-                                      읽음 {message.readCount}
+                                  {/* 읽음 표시 - 채팅박스 하단 높이에 맞춰 표시 */}
+                                  {isMyMessage && group?.memberCount && (
+                                    <span className="text-xs text-gray-400 whitespace-nowrap self-end pb-8">
+                                    {Math.max(0, (group.memberCount || 0) - (message.readCount || 0))}
                                     </span>
                                   )}
-                                </div>
-                              </>
-                            )}
-                          </div>
+                                </>
+                              )}
+                            </div>
                         </div>
                       </div>
                     )
@@ -1128,7 +1294,9 @@ export default function ChatRoomPage() {
                   <div className="mb-2 p-2 bg-gray-100 rounded-lg flex items-center justify-between">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <span className="text-xs text-gray-500">답장:</span>
-                      <span className="text-xs text-gray-700 truncate">@{replyingTo.nickname}: {replyingTo.message}</span>
+                      <span className="text-xs text-gray-700 truncate">
+                        @{replyingTo.displayName || replyingTo.nickname || replyingTo.username}: {replyingTo.message}
+                      </span>
                     </div>
                     <button
                       type="button"
@@ -1259,6 +1427,148 @@ export default function ChatRoomPage() {
           onCrop={handleImageCrop}
           aspectRatio={1}
         />
+      )}
+
+      {/* 설정 모달 */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">채팅방 설정</h2>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* 탭 메뉴 */}
+            {group?.isAdmin && (
+              <div className="flex gap-2 mb-4 border-b border-gray-200">
+                <button
+                  onClick={() => setSettingsTab('room')}
+                  className={`px-4 py-2 text-sm font-medium transition ${
+                    settingsTab === 'room'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  서버 관리
+                </button>
+                <button
+                  onClick={() => setSettingsTab('displayName')}
+                  className={`px-4 py-2 text-sm font-medium transition ${
+                    settingsTab === 'displayName'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  별명 설정
+                </button>
+              </div>
+            )}
+
+            {/* 서버 관리 탭 (관리자만) */}
+            {settingsTab === 'room' && group?.isAdmin && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    채팅방 이름
+                  </label>
+                  <input
+                    type="text"
+                    value={editRoomName}
+                    onChange={(e) => setEditRoomName(e.target.value)}
+                    placeholder="채팅방 이름"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    disabled={updatingRoom || deletingRoom}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    채팅방 설명 (선택사항)
+                  </label>
+                  <textarea
+                    value={editRoomDescription}
+                    onChange={(e) => setEditRoomDescription(e.target.value)}
+                    placeholder="채팅방 설명"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    disabled={updatingRoom || deletingRoom}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!editRoomName.trim() || editRoomName.length < 2) {
+                        alert('채팅방 이름은 2자 이상이어야 합니다.')
+                        return
+                      }
+                      try {
+                        setUpdatingRoom(true)
+                        await groupApi.updateChatRoom(groupId, roomId, {
+                          name: editRoomName,
+                          description: editRoomDescription || undefined,
+                        })
+                        await fetchChatRooms()
+                        alert('채팅방 정보가 수정되었습니다.')
+                        setShowSettingsModal(false)
+                      } catch (error: any) {
+                        alert(error.response?.data?.message || '채팅방 수정에 실패했습니다.')
+                      } finally {
+                        setUpdatingRoom(false)
+                      }
+                    }}
+                    disabled={updatingRoom || deletingRoom || !editRoomName.trim() || editRoomName.length < 2}
+                    className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {updatingRoom ? '저장 중...' : '저장'}
+                  </button>
+                  <button
+                    onClick={handleDeleteRoom}
+                    disabled={updatingRoom || deletingRoom}
+                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deletingRoom ? '삭제 중...' : '채팅방 삭제'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 별명 설정 탭 */}
+            {settingsTab === 'displayName' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    내 별명 (이 채팅방에서만 표시)
+                  </label>
+                  <input
+                    type="text"
+                    value={myDisplayName}
+                    onChange={(e) => setMyDisplayName(e.target.value)}
+                    placeholder="별명을 입력하세요 (선택사항)"
+                    maxLength={30}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    disabled={updatingDisplayName}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    {myDisplayName.length}/30 (비워두면 기본 닉네임이 표시됩니다)
+                  </p>
+                </div>
+                <button
+                  onClick={handleUpdateDisplayName}
+                  disabled={updatingDisplayName}
+                  className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition disabled:opacity-50"
+                >
+                  {updatingDisplayName ? '저장 중...' : '저장'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* 채팅방 생성 모달 */}

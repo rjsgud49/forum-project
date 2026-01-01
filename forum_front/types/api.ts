@@ -254,6 +254,15 @@ export interface GroupChatMessageDTO {
   isAdmin: boolean
   createdTime: string
   readCount?: number
+  replyToMessageId?: number  // 답장한 메시지 ID
+  replyToMessage?: {  // 답장한 메시지 정보
+    id: number
+    message: string
+    username: string
+    nickname: string
+    displayName?: string
+    profileImageUrl?: string
+  }
 }
 
 export interface CreateGroupChatMessageDTO {
