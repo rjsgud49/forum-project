@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
-import { postApi, imageUploadApi } from '@/services/api'
+import { postApi, imageUploadApi, groupApi } from '@/services/api'
+import type { GroupListDTO } from '@/types/api'
 import Header from '@/components/Header'
 import ImageInsertButton from '@/components/ImageInsertButton'
 import ImageCropModal from '@/components/ImageCropModal'
@@ -15,7 +16,7 @@ export default function CreatePostPage() {
   const router = useRouter()
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [formData, setFormData] = useState({ title: '', body: '', profileImageUrl: '', tags: [] as string[] })
+  const [formData, setFormData] = useState({ title: '', body: '', profileImageUrl: '', tags: [] as string[], groupId: undefined as number | undefined })
   const [tagInput, setTagInput] = useState('')
   const [profileImagePreview, setProfileImagePreview] = useState<string>('')
   const [uploadingProfile, setUploadingProfile] = useState(false)
@@ -23,12 +24,16 @@ export default function CreatePostPage() {
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [userGroups, setUserGroups] = useState<GroupListDTO[]>([])
+  const [loadingGroups, setLoadingGroups] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const profileImageInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!isAuthenticated) {
       setShowLoginModal(true)
+    } else {
+      fetchUserGroups()
     }
 
     // 뒤로가기 방지: 히스토리 교체
@@ -51,6 +56,24 @@ export default function CreatePostPage() {
     }
   }, [isAuthenticated, router])
 
+  const fetchUserGroups = async () => {
+    try {
+      setLoadingGroups(true)
+      const response = await groupApi.getGroupList(0, 100)
+      if (response.success && response.data) {
+        const content = response.data.content || response.data
+        const groupsList = Array.isArray(content) ? content : []
+        // 가입한 모임만 필터링
+        const joinedGroups = groupsList.filter(group => group.isMember)
+        setUserGroups(joinedGroups)
+      }
+    } catch (error) {
+      console.error('모임 목록 조회 실패:', error)
+    } finally {
+      setLoadingGroups(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -66,6 +89,7 @@ export default function CreatePostPage() {
       const submitData = {
         ...formData,
         tags: tags.length > 0 ? tags : undefined,
+        groupId: formData.groupId || undefined,
       }
       
       console.log('제출할 데이터:', submitData)
@@ -194,6 +218,34 @@ export default function CreatePostPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <h1 className="text-3xl font-bold text-gray-900 mb-8">게시글 작성</h1>
           <form onSubmit={handleSubmit} className="space-y-6">
+          {/* 모임 선택 */}
+          {userGroups.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                모임 선택 (선택사항)
+              </label>
+              <select
+                name="groupId"
+                value={formData.groupId || ''}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  groupId: e.target.value ? Number(e.target.value) : undefined,
+                })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">일반 게시글 (모임 없음)</option>
+                {userGroups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-sm text-gray-500">
+                모임을 선택하면 해당 모임의 활동 게시글로 등록됩니다.
+              </p>
+            </div>
+          )}
+          
           {/* 프로필 이미지 업로드 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

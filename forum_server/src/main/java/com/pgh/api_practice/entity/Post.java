@@ -32,6 +32,10 @@ public class Post {
     @JoinColumn(name = "user_id")
     private Users user;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id")
+    private Group group;
+
     @Builder.Default
     @Column(name = "views")
     private int views = 0;

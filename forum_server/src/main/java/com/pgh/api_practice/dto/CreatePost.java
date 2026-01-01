@@ -19,4 +19,6 @@ public class CreatePost {
     private String profileImageUrl;  // 게시물 프로필 이미지 URL
 
     private List<String> tags;  // 태그 목록
+
+    private Long groupId;  // 모임 ID (모임 게시글인 경우)
 }

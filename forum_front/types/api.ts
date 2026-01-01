@@ -36,6 +36,8 @@ export interface PostListDTO {
   profileImageUrl?: string  // 게시물 프로필 이미지 URL
   likeCount: number
   tags?: string[]  // 태그 목록
+  groupId?: number  // 모임 ID
+  groupName?: string  // 모임 이름
 }
 
 export interface PostDetailDTO {
@@ -50,6 +52,8 @@ export interface PostDetailDTO {
   likeCount: number
   isLiked: boolean
   tags?: string[]  // 태그 목록
+  groupId?: number  // 모임 ID
+  groupName?: string  // 모임 이름
 }
 
 export interface CreatePost {
@@ -57,6 +61,7 @@ export interface CreatePost {
   body: string
   profileImageUrl?: string
   tags?: string[]  // 태그 목록
+  groupId?: number  // 모임 ID (모임 게시글인 경우)
 }
 
 export interface PatchPost {

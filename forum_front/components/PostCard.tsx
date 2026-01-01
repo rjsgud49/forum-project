@@ -88,7 +88,14 @@ function PostCard({ post }: PostCardProps) {
       {/* 카드 하단 정보 - 컴팩트하게 */}
       <div className="p-3 flex-1 flex flex-col justify-between">
         <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
-          <span className="font-medium text-gray-800">{post.username}</span>
+          <div className="flex items-center gap-2">
+            {post.groupName && (
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                {post.groupName}
+              </span>
+            )}
+            <span className="font-medium text-gray-800">{post.username}</span>
+          </div>
           <span className="text-gray-500">{formatDate(post.createDateTime)}</span>
         </div>
         <div className="flex items-center justify-between text-xs text-gray-500">

@@ -21,4 +21,6 @@ public class PostListDTO {
     private String profileImageUrl;
     private long likeCount;
     private List<String> tags;
+    private Long groupId;
+    private String groupName;
 }

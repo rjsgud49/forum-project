@@ -5,9 +5,11 @@ import { useParams, useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
 import { groupApi } from '@/services/api'
-import type { GroupDetailDTO, GroupPostListDTO, GroupChatRoomDTO, GroupMemberDTO, UpdateGroupDTO } from '@/types/api'
+import type { GroupDetailDTO, GroupPostListDTO, GroupChatRoomDTO, GroupMemberDTO, UpdateGroupDTO, PostListDTO } from '@/types/api'
+import { postApi } from '@/services/api'
 import Header from '@/components/Header'
 import LoginModal from '@/components/LoginModal'
+import PostCard from '@/components/PostCard'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { getUsernameFromToken } from '@/utils/jwt'
@@ -22,7 +24,7 @@ export default function GroupDetailPage() {
   const currentUsername = getUsernameFromToken()
   const [activeTab, setActiveTab] = useState<TabType>('intro')
   const [group, setGroup] = useState<GroupDetailDTO | null>(null)
-  const [posts, setPosts] = useState<GroupPostListDTO[]>([])
+  const [posts, setPosts] = useState<PostListDTO[]>([])
   const [chatRooms, setChatRooms] = useState<GroupChatRoomDTO[]>([])
   const [members, setMembers] = useState<GroupMemberDTO[]>([])
   const [loading, setLoading] = useState(true)
@@ -96,11 +98,13 @@ export default function GroupDetailPage() {
 
   const fetchPosts = async () => {
     try {
-      const response = await groupApi.getGroupPostList(groupId, 0, 20)
+      // 일반 게시글 API에서 해당 모임의 게시글만 필터링
+      const response = await postApi.getPostList(0, 20, 'RESENT')
       if (response.success && response.data) {
-        // Page 객체에서 content 추출
-        const content = response.data.content || response.data
-        setPosts(Array.isArray(content) ? content : [])
+        const allPosts = response.data.content || []
+        // 해당 모임의 게시글만 필터링
+        const groupPosts = allPosts.filter(post => post.groupId === groupId)
+        setPosts(groupPosts)
       }
     } catch (error) {
       console.error('모임 활동 게시물 조회 실패:', error)
@@ -355,22 +359,9 @@ export default function GroupDetailPage() {
             {posts.length === 0 ? (
               <div className="text-center text-gray-500 py-12">등록된 활동이 없습니다.</div>
             ) : (
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {posts.map((post) => (
-                  <div
-                    key={post.id}
-                    onClick={() => handlePostClick(post.id)}
-                    className="border p-4 rounded hover:shadow-lg transition cursor-pointer"
-                  >
-                    <h3 className="text-lg font-semibold mb-2">{post.title}</h3>
-                    <p className="text-gray-600 text-sm line-clamp-2 mb-2">{post.body}</p>
-                    <div className="flex justify-between items-center text-sm text-gray-500">
-                      <span>{post.nickname} ({post.username})</span>
-                      <span>
-                        {format(new Date(post.createDateTime), 'yyyy-MM-dd HH:mm', { locale: ko })}
-                      </span>
-                    </div>
-                  </div>
+                  <PostCard key={post.id} post={post} />
                 ))}
               </div>
             )}

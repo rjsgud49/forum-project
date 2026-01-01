@@ -22,4 +22,6 @@ public class PostDetailDTO  {
     private long likeCount;
     private boolean isLiked;
     private List<String> tags;
+    private Long groupId;
+    private String groupName;
 }

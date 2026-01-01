@@ -47,6 +47,15 @@ public class GroupService {
             throw new ApplicationUnauthorizedException("인증이 필요합니다.");
         }
 
+        // 사용자가 가입한 모임 수 확인 (주인인 모임 포함)
+        long ownedGroupCount = groupRepository.countByOwnerId(currentUser.getId());
+        long memberGroupCount = groupMemberRepository.findByUserId(currentUser.getId()).size();
+        long totalGroupCount = ownedGroupCount + memberGroupCount;
+        
+        if (totalGroupCount >= 10) {
+            throw new IllegalStateException("한 사용자는 최대 10개의 모임에 가입할 수 있습니다.");
+        }
+
         Group group = Group.builder()
                 .name(dto.getName())
                 .description(dto.getDescription())

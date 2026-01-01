@@ -4,6 +4,7 @@ import com.pgh.api_practice.dto.CreatePost;
 import com.pgh.api_practice.dto.PatchPostDTO;
 import com.pgh.api_practice.dto.PostDetailDTO;
 import com.pgh.api_practice.dto.PostListDTO;
+import com.pgh.api_practice.entity.Group;
 import com.pgh.api_practice.entity.Post;
 import com.pgh.api_practice.entity.PostLike;
 import com.pgh.api_practice.entity.PostTag;
@@ -11,6 +12,8 @@ import com.pgh.api_practice.entity.Tag;
 import com.pgh.api_practice.entity.Users;
 import com.pgh.api_practice.exception.ApplicationUnauthorizedException;
 import com.pgh.api_practice.exception.ResourceNotFoundException;
+import com.pgh.api_practice.repository.GroupMemberRepository;
+import com.pgh.api_practice.repository.GroupRepository;
 import com.pgh.api_practice.repository.PostLikeRepository;
 import com.pgh.api_practice.repository.PostRepository;
 import com.pgh.api_practice.repository.PostTagRepository;
@@ -39,6 +42,8 @@ public class PostService {
     private final PostLikeRepository postLikeRepository;
     private final TagRepository tagRepository;
     private final PostTagRepository postTagRepository;
+    private final GroupRepository groupRepository;
+    private final GroupMemberRepository groupMemberRepository;
 
     /** ✅ 게시글 저장 */
     @Transactional
@@ -53,12 +58,29 @@ public class PostService {
         Users author = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
 
-        Post post = Post.builder()
+        Post.PostBuilder postBuilder = Post.builder()
                 .title(dto.getTitle())
                 .body(dto.getBody())
                 .user(author)
-                .profileImageUrl(dto.getProfileImageUrl())
-                .build();
+                .profileImageUrl(dto.getProfileImageUrl());
+
+        // 모임 게시글인 경우
+        if (dto.getGroupId() != null) {
+            Group group = groupRepository.findByIdAndIsDeletedFalse(dto.getGroupId())
+                    .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
+            
+            // 모임 멤버인지 확인
+            boolean isOwner = group.getOwner().getId().equals(author.getId());
+            boolean isMember = isOwner || groupMemberRepository.existsByGroupIdAndUserId(dto.getGroupId(), author.getId());
+            
+            if (!isMember) {
+                throw new ApplicationUnauthorizedException("모임 멤버만 게시글을 작성할 수 있습니다.");
+            }
+            
+            postBuilder.group(group);
+        }
+
+        Post post = postBuilder.build();
 
         Post created = postRepository.save(post);
         
@@ -145,7 +167,7 @@ public class PostService {
                 .map(pt -> pt.getTag().getName())
                 .collect(Collectors.toList());
 
-        return PostDetailDTO.builder()
+        PostDetailDTO.PostDetailDTOBuilder builder = PostDetailDTO.builder()
                 .title(post.getTitle())
                 .body(post.getBody())
                 .username(post.getUser().getUsername())
@@ -155,8 +177,15 @@ public class PostService {
                 .profileImageUrl(post.getProfileImageUrl())
                 .likeCount(likeCount)
                 .isLiked(isLiked)
-                .tags(tags)
-                .build();
+                .tags(tags);
+        
+        // 모임 정보 추가
+        if (post.getGroup() != null) {
+            builder.groupId(post.getGroup().getId())
+                   .groupName(post.getGroup().getName());
+        }
+        
+        return builder.build();
     }
 
     /** ✅ 전체 게시글 목록 */
@@ -185,7 +214,7 @@ public class PostService {
             // 좋아요 수 조회
             long likeCount = postLikeRepository.countByPostId(post.getId());
             
-            return PostListDTO.builder()
+            PostListDTO.PostListDTOBuilder builder = PostListDTO.builder()
                     .id(post.getId())
                     .title(post.getTitle())
                     .username(post.getUser().getUsername())
@@ -193,8 +222,15 @@ public class PostService {
                     .createDateTime(post.getCreatedTime())
                     .updateDateTime(updateTime)
                     .profileImageUrl(post.getProfileImageUrl())
-                    .likeCount(likeCount)
-                    .build();
+                    .likeCount(likeCount);
+            
+            // 모임 정보 추가
+            if (post.getGroup() != null) {
+                builder.groupId(post.getGroup().getId())
+                       .groupName(post.getGroup().getName());
+            }
+            
+            return builder.build();
         });
     }
 
