@@ -2,13 +2,6 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Client, IMessage } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 
-// SockJS를 Client의 webSocketFactory에 사용하기 위한 타입 확장
-declare module '@stomp/stompjs' {
-  export interface Client {
-    webSocketFactory?: () => any
-  }
-}
-
 interface UseWebSocketOptions {
   groupId: number
   roomId: number
@@ -53,7 +46,7 @@ export function useWebSocket({
 
     const client = new Client({
       webSocketFactory: () => {
-        return new SockJS(socketUrl) as any
+        return new SockJS(socketUrl) as unknown as WebSocket
       },
       connectHeaders: {
         Authorization: `Bearer ${token}`,
