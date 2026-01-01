@@ -16,7 +16,7 @@ export default function CreatePostPage() {
   const router = useRouter()
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [formData, setFormData] = useState({ title: '', body: '', profileImageUrl: '', tags: [] as string[], groupId: undefined as number | undefined })
+  const [formData, setFormData] = useState({ title: '', body: '', profileImageUrl: '', tags: [] as string[], groupId: undefined as number | undefined, isPublic: true })
   const [tagInput, setTagInput] = useState('')
   const [profileImagePreview, setProfileImagePreview] = useState<string>('')
   const [uploadingProfile, setUploadingProfile] = useState(false)
@@ -90,6 +90,7 @@ export default function CreatePostPage() {
         ...formData,
         tags: tags.length > 0 ? tags : undefined,
         groupId: formData.groupId || undefined,
+        isPublic: formData.groupId ? formData.isPublic : undefined,
       }
       
       console.log('제출할 데이터:', submitData)
@@ -243,6 +244,27 @@ export default function CreatePostPage() {
               <p className="mt-1 text-sm text-gray-500">
                 모임을 선택하면 해당 모임의 활동 게시글로 등록됩니다.
               </p>
+              {formData.groupId && (
+                <div className="mt-3">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.isPublic}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        isPublic: e.target.checked,
+                      })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      모임 외부에 게시글 공개하기
+                    </span>
+                  </label>
+                  <p className="mt-1 text-xs text-gray-500 ml-6">
+                    체크하면 일반 게시글 목록에도 표시됩니다.
+                  </p>
+                </div>
+              )}
             </div>
           )}
           

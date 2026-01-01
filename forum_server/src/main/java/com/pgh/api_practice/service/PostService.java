@@ -78,6 +78,9 @@ public class PostService {
             }
             
             postBuilder.group(group);
+            // 모임 게시글의 외부 노출 여부 설정 (기본값: true)
+            boolean isPublic = dto.getIsPublic() != null ? dto.getIsPublic() : true;
+            postBuilder.isPublic(isPublic);
         }
 
         Post post = postBuilder.build();
@@ -182,7 +185,8 @@ public class PostService {
         // 모임 정보 추가
         if (post.getGroup() != null) {
             builder.groupId(post.getGroup().getId())
-                   .groupName(post.getGroup().getName());
+                   .groupName(post.getGroup().getName())
+                   .isPublic(post.isPublic());
         }
         
         return builder.build();
@@ -193,14 +197,15 @@ public class PostService {
     public Page<PostListDTO> getPostList(Pageable pageable, String sortType) {
         Page<Post> posts;
 
+        // 일반 게시글과 모임 외부 노출 게시글만 조회
         if ("RESENT".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findAllByIsDeletedFalseOrderByCreatedTimeDesc(pageable);
+            posts = postRepository.findAllPublicPostsOrderByCreatedTimeDesc(pageable);
         } else if ("HITS".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findAllByIsDeletedFalseOrderByViewsDesc(pageable);
+            posts = postRepository.findAllPublicPostsOrderByViewsDesc(pageable);
         } else if ("LIKES".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findAllByIsDeletedFalseOrderByLikesDesc(pageable);
+            posts = postRepository.findAllPublicPostsOrderByLikesDesc(pageable);
         } else {
-            posts = postRepository.findAllByIsDeletedFalseOrderByCreatedTimeDesc(pageable);
+            posts = postRepository.findAllPublicPostsOrderByCreatedTimeDesc(pageable);
         }
 
         return posts.map(post -> {
@@ -227,7 +232,8 @@ public class PostService {
             // 모임 정보 추가
             if (post.getGroup() != null) {
                 builder.groupId(post.getGroup().getId())
-                       .groupName(post.getGroup().getName());
+                       .groupName(post.getGroup().getName())
+                       .isPublic(post.isPublic());
             }
             
             return builder.build();
@@ -492,6 +498,12 @@ public class PostService {
             postTagRepository.deleteByPostId(post.getId());
             // 새 태그 저장
             saveTags(post, dto.getTags());
+            isModified = true;
+        }
+        
+        // 모임 게시글의 외부 노출 여부 업데이트
+        if (post.getGroup() != null && dto.getIsPublic() != null) {
+            post.setPublic(dto.getIsPublic());
             isModified = true;
         }
         

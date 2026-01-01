@@ -54,6 +54,7 @@ export interface PostDetailDTO {
   tags?: string[]  // 태그 목록
   groupId?: number  // 모임 ID
   groupName?: string  // 모임 이름
+  isPublic?: boolean  // 모임 외부 노출 여부
 }
 
 export interface CreatePost {
@@ -69,6 +70,7 @@ export interface PatchPost {
   body?: string
   profileImageUrl?: string
   tags?: string[]  // 태그 목록
+  isPublic?: boolean  // 모임 외부 노출 여부 (모임 게시글인 경우만 사용)
 }
 
 export interface CommentDTO {

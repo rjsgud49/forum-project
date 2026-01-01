@@ -21,4 +21,6 @@ public class CreatePost {
     private List<String> tags;  // 태그 목록
 
     private Long groupId;  // 모임 ID (모임 게시글인 경우)
+    
+    private Boolean isPublic;  // 모임 외부 노출 여부 (모임 게시글인 경우만 사용)
 }

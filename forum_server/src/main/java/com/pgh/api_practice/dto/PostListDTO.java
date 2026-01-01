@@ -23,4 +23,5 @@ public class PostListDTO {
     private List<String> tags;
     private Long groupId;
     private String groupName;
+    private Boolean isPublic;  // 모임 외부 노출 여부
 }

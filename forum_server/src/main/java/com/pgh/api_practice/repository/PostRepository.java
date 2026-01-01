@@ -15,6 +15,16 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     Page<Post> findAllByIsDeletedFalseOrderByCreatedTimeDesc(Pageable pageable);
     Page<Post> findAllByIsDeletedFalseOrderByViewsDesc(Pageable pageable);
+    
+    // 모임 외부 노출 게시글만 조회 (group이 null이거나 isPublic이 true)
+    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND (p.group IS NULL OR p.isPublic = true) ORDER BY p.createdTime DESC")
+    Page<Post> findAllPublicPostsOrderByCreatedTimeDesc(Pageable pageable);
+    
+    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND (p.group IS NULL OR p.isPublic = true) ORDER BY p.views DESC")
+    Page<Post> findAllPublicPostsOrderByViewsDesc(Pageable pageable);
+    
+    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND (p.group IS NULL OR p.isPublic = true) ORDER BY (SELECT COUNT(pl) FROM PostLike pl WHERE pl.post.id = p.id) DESC, p.createdTime DESC")
+    Page<Post> findAllPublicPostsOrderByLikesDesc(Pageable pageable);
 
     Page<Post> findAllByUserIdAndIsDeletedFalseOrderByCreatedTimeDesc(Long userId, Pageable pageable);
     Page<Post> findAllByUserIdAndIsDeletedFalseOrderByViewsDesc(Long userId, Pageable pageable);
@@ -46,13 +56,13 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @Query("SELECT p FROM Post p WHERE p.id IN :ids AND p.isDeleted = false ORDER BY (SELECT COUNT(pl) FROM PostLike pl WHERE pl.post.id = p.id) DESC, p.createdTime DESC")
     Page<Post> findAllByIdInAndIsDeletedFalseOrderByLikesDesc(@Param("ids") List<Long> ids, Pageable pageable);
     
-    // 검색 기능: 제목과 본문에서 검색
-    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND (p.title LIKE %:keyword% OR p.body LIKE %:keyword%) ORDER BY p.createdTime DESC")
+    // 검색 기능: 제목과 본문에서 검색 (모임 외부 노출 게시글만)
+    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND (p.group IS NULL OR p.isPublic = true) AND (p.title LIKE %:keyword% OR p.body LIKE %:keyword%) ORDER BY p.createdTime DESC")
     Page<Post> searchPostsByKeyword(@Param("keyword") String keyword, Pageable pageable);
     
-    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND (p.title LIKE %:keyword% OR p.body LIKE %:keyword%) ORDER BY p.views DESC")
+    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND (p.group IS NULL OR p.isPublic = true) AND (p.title LIKE %:keyword% OR p.body LIKE %:keyword%) ORDER BY p.views DESC")
     Page<Post> searchPostsByKeywordOrderByViews(@Param("keyword") String keyword, Pageable pageable);
     
-    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND (p.title LIKE %:keyword% OR p.body LIKE %:keyword%) ORDER BY (SELECT COUNT(pl) FROM PostLike pl WHERE pl.post.id = p.id) DESC, p.createdTime DESC")
+    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND (p.group IS NULL OR p.isPublic = true) AND (p.title LIKE %:keyword% OR p.body LIKE %:keyword%) ORDER BY (SELECT COUNT(pl) FROM PostLike pl WHERE pl.post.id = p.id) DESC, p.createdTime DESC")
     Page<Post> searchPostsByKeywordOrderByLikes(@Param("keyword") String keyword, Pageable pageable);
 }

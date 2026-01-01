@@ -26,6 +26,7 @@ export default function PostDetailPage() {
   const [authorInfo, setAuthorInfo] = useState<UserInfoDTO | null>(null)
   const [following, setFollowing] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
+  const [togglingPublic, setTogglingPublic] = useState(false)
 
   useEffect(() => {
     if (params.id) {
@@ -583,6 +584,31 @@ export default function PostDetailPage() {
       }
     }
 
+    const handleTogglePublic = async () => {
+      if (!isAuthenticated || !post || !post.groupId) {
+        return
+      }
+
+      try {
+        setTogglingPublic(true)
+        const newIsPublic = !post.isPublic
+        const response = await postApi.updatePost(Number(params.id), {
+          isPublic: newIsPublic,
+        })
+        if (response.success) {
+          setPost({
+            ...post,
+            isPublic: newIsPublic,
+          })
+          alert(newIsPublic ? '모임 외부에 게시글이 공개되었습니다.' : '모임 외부 게시글 공개가 해제되었습니다.')
+        }
+      } catch (error: any) {
+        alert(error.response?.data?.message || '공개 설정 변경에 실패했습니다.')
+      } finally {
+        setTogglingPublic(false)
+      }
+    }
+
     return (
       <div className="min-h-screen bg-white">
         <Header onLoginClick={() => setShowLoginModal(true)} />
@@ -598,7 +624,19 @@ export default function PostDetailPage() {
           ) : post ? (
             <>
               <article className="bg-white">
-                <h1 className="text-4xl font-bold text-gray-900 mb-4">{post.title}</h1>
+                <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                  {post.title}
+                  {post.groupName && (
+                    <span className="ml-3 text-lg font-normal">
+                      <Link
+                        href={`/social-gathering/${post.groupId}`}
+                        className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm hover:bg-blue-200 transition"
+                      >
+                        {post.groupName}
+                      </Link>
+                    </span>
+                  )}
+                </h1>
                 <div className="flex items-center justify-between text-sm text-gray-500 mb-8 pb-4 border-b">
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center space-x-2">
@@ -709,6 +747,20 @@ export default function PostDetailPage() {
                     </button>
                     {isOwner && (
                       <div className="flex space-x-2">
+                        {post.groupId && (
+                          <button
+                            onClick={handleTogglePublic}
+                            disabled={togglingPublic}
+                            className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                              post.isPublic
+                                ? 'bg-green-500 text-white hover:bg-green-600'
+                                : 'bg-gray-500 text-white hover:bg-gray-600'
+                            }`}
+                            title={post.isPublic ? '모임 외부 공개 중' : '모임 외부 비공개'}
+                          >
+                            {togglingPublic ? '처리 중...' : post.isPublic ? '외부 공개' : '외부 비공개'}
+                          </button>
+                        )}
                         <button
                           onClick={handleEdit}
                           className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"

@@ -37,6 +37,10 @@ public class Post {
     private Group group;
 
     @Builder.Default
+    @Column(name = "is_public", nullable = false)
+    private boolean isPublic = true;  // 모임 외부 노출 여부 (기본값: true)
+
+    @Builder.Default
     @Column(name = "views")
     private int views = 0;
 
