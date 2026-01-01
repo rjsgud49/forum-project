@@ -92,6 +92,16 @@ public class GroupController {
         return ResponseEntity.ok(ApiResponse.ok(message));
     }
 
+    /** 멤버 별명 변경 */
+    @PatchMapping("/{groupId}/members/{userId}/display-name")
+    public ResponseEntity<ApiResponse<Void>> updateMemberDisplayName(
+            @PathVariable Long groupId,
+            @PathVariable Long userId,
+            @RequestParam(required = false) String displayName) {
+        groupService.updateMemberDisplayName(groupId, userId, displayName);
+        return ResponseEntity.ok(ApiResponse.ok("별명이 변경되었습니다."));
+    }
+
     /** 모임 삭제 */
     @DeleteMapping("/{groupId}")
     public ResponseEntity<ApiResponse<Void>> deleteGroup(

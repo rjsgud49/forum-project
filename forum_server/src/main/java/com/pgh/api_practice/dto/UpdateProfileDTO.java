@@ -9,4 +9,5 @@ public class UpdateProfileDTO {
     private String profileImageUrl;
     private String email;
     private String githubLink;
+    private String nickname;
 }

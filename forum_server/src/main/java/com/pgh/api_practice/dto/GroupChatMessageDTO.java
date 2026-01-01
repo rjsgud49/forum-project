@@ -14,6 +14,7 @@ public class GroupChatMessageDTO {
     private String message;
     private String username;
     private String nickname;
+    private String displayName;  // 채팅방별 별명
     private String profileImageUrl;
     
     @JsonProperty("isAdmin")

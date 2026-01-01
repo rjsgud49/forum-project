@@ -31,6 +31,7 @@ export default function SettingsPage() {
     profileImageUrl: '',
     email: '',
     githubLink: '',
+    nickname: '',
   })
   
   // 비밀번호 변경
@@ -58,6 +59,7 @@ export default function SettingsPage() {
           profileImageUrl: response.data.profileImageUrl || '',
           email: response.data.email || '',
           githubLink: response.data.githubLink || '',
+          nickname: response.data.nickname || '',
         })
         if (response.data.profileImageUrl) {
           const baseUrl = process.env.NEXT_PUBLIC_UPLOAD_BASE_URL || ''
@@ -136,6 +138,9 @@ export default function SettingsPage() {
       const updateData: UpdateProfile = {}
       if (formData.profileImageUrl !== user?.profileImageUrl) {
         updateData.profileImageUrl = formData.profileImageUrl
+      }
+      if (formData.nickname !== user?.nickname) {
+        updateData.nickname = formData.nickname
       }
       if (formData.email !== user?.email) {
         updateData.email = formData.email
@@ -297,6 +302,21 @@ export default function SettingsPage() {
         <form onSubmit={handleUpdateProfile} className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">프로필 정보</h2>
           <div className="space-y-4">
+            <div>
+              <label htmlFor="nickname" className="block text-sm font-medium text-gray-700 mb-2">
+                닉네임
+              </label>
+              <input
+                type="text"
+                id="nickname"
+                value={formData.nickname}
+                onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
+                maxLength={15}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                placeholder="닉네임을 입력하세요 (최대 15자)"
+              />
+              <p className="mt-1 text-xs text-gray-500">{formData.nickname?.length || 0}/15</p>
+            </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                 이메일

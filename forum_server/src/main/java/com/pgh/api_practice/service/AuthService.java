@@ -169,6 +169,15 @@ public class AuthService {
             modified = true;
         }
         
+        if (dto.getNickname() != null && !dto.getNickname().equals(user.getNickname())) {
+            // 닉네임 중복 확인
+            if (authRepository.existsByNickname(dto.getNickname()) && !dto.getNickname().equals(user.getNickname())) {
+                throw new UserAlreadyExistException("이미 사용 중인 닉네임입니다.");
+            }
+            user.setNickname(dto.getNickname());
+            modified = true;
+        }
+        
         if (modified) {
             authRepository.save(user);
         }

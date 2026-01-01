@@ -35,6 +35,9 @@ public class GroupMember {
     @Column(name = "is_admin", nullable = false)
     private boolean isAdmin = false;
 
+    @Column(name = "display_name", length = 30)
+    private String displayName;  // 채팅방별 별명
+
     @Column(name = "create_datetime")
     @CreatedDate
     private LocalDateTime createdTime;

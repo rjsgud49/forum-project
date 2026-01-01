@@ -13,6 +13,7 @@ public class GroupMemberDTO {
     private String username;
     private String nickname;
     private String profileImageUrl;
+    private String displayName;  // 채팅방별 별명
     
     @JsonProperty("isAdmin")
     private boolean isAdmin;

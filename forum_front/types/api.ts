@@ -129,6 +129,7 @@ export interface UpdateProfile {
   profileImageUrl?: string
   email?: string
   githubLink?: string
+  nickname?: string
 }
 
 export interface ChangePassword {
@@ -181,6 +182,7 @@ export interface GroupMemberDTO {
   username: string
   nickname: string
   profileImageUrl?: string
+  displayName?: string  // 채팅방별 별명
   isAdmin: boolean
   isOwner: boolean
 }
@@ -247,6 +249,7 @@ export interface GroupChatMessageDTO {
   message: string
   username: string
   nickname: string
+  displayName?: string  // 채팅방별 별명
   profileImageUrl?: string
   isAdmin: boolean
   createdTime: string

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
 import { groupApi, imageUploadApi } from '@/services/api'
-import type { GroupChatMessageDTO, GroupChatRoomDTO, GroupDetailDTO } from '@/types/api'
+import type { GroupChatMessageDTO, GroupChatRoomDTO, GroupDetailDTO, GroupMemberDTO } from '@/types/api'
 import Header from '@/components/Header'
 import LoginModal from '@/components/LoginModal'
 import ImageCropModal from '@/components/ImageCropModal'
@@ -36,9 +36,14 @@ export default function ChatRoomPage() {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const profileImageInputRef = useRef<HTMLInputElement>(null)
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(true)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: number } | null>(null)
+  const [initialLoad, setInitialLoad] = useState(true)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: number; isMyMessage: boolean } | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null)
   const [editMessageText, setEditMessageText] = useState('')
+  const [replyingTo, setReplyingTo] = useState<GroupChatMessageDTO | null>(null)
+  const [showMembers, setShowMembers] = useState(false)
+  const [members, setMembers] = useState<GroupMemberDTO[]>([])
+  const [messageReactions, setMessageReactions] = useState<Record<number, string[]>>({})
   const [editingRoom, setEditingRoom] = useState(false)
   const [editRoomName, setEditRoomName] = useState('')
   const [editRoomDescription, setEditRoomDescription] = useState('')
@@ -51,6 +56,8 @@ export default function ChatRoomPage() {
   const [showNewRoomImageCrop, setShowNewRoomImageCrop] = useState(false)
   const [deletingRoom, setDeletingRoom] = useState(false)
   const newRoomImageInputRef = useRef<HTMLInputElement>(null)
+  const [myDisplayName, setMyDisplayName] = useState<string>('')
+  const [updatingDisplayName, setUpdatingDisplayName] = useState(false)
 
   useEffect(() => {
     if (groupId) {
@@ -160,12 +167,18 @@ export default function ChatRoomPage() {
     }
   }, [checkScrollPosition])
 
-  // 메시지가 추가될 때 스크롤 처리
+  // 메시지가 추가될 때 스크롤 처리 (초기 로드 제외)
   useEffect(() => {
+    if (initialLoad) {
+      // 초기 로드 시에는 스크롤하지 않음
+      setInitialLoad(false)
+      return
+    }
+    
     if (isScrolledToBottom) {
       scrollToBottom()
     }
-  }, [messages, isScrolledToBottom])
+  }, [messages, isScrolledToBottom, initialLoad])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -180,6 +193,8 @@ export default function ChatRoomPage() {
         console.log('Messages:', reversedMessages)
         console.log('First message isAdmin:', reversedMessages[0]?.isAdmin)
         setMessages(reversedMessages)
+        // 초기 로드 플래그 설정
+        setInitialLoad(true)
       }
     } catch (error) {
       console.error('채팅 메시지 조회 실패:', error)
@@ -187,6 +202,53 @@ export default function ChatRoomPage() {
       setLoading(false)
     }
   }
+
+  // 멤버 목록 조회
+  const fetchMembers = async () => {
+    try {
+      const response = await groupApi.getGroupMembers(groupId)
+      if (response.success && response.data) {
+        setMembers(response.data)
+        // 내 별명 찾기
+        const myMember = response.data.find(m => m.username === currentUsername)
+        if (myMember) {
+          setMyDisplayName(myMember.displayName || '')
+        }
+      }
+    } catch (error) {
+      console.error('멤버 목록 조회 실패:', error)
+    }
+  }
+
+  // 별명 업데이트
+  const handleUpdateDisplayName = async () => {
+    if (!currentUsername) return
+    
+    try {
+      setUpdatingDisplayName(true)
+      const myMember = members.find(m => m.username === currentUsername)
+      if (!myMember) {
+        alert('멤버 정보를 찾을 수 없습니다.')
+        return
+      }
+      
+      const response = await groupApi.updateMemberDisplayName(groupId, myMember.userId, myDisplayName.trim() || undefined)
+      if (response.success) {
+        alert('별명이 변경되었습니다.')
+        fetchMembers() // 멤버 목록 새로고침
+      }
+    } catch (error: any) {
+      alert(error.response?.data?.message || '별명 변경에 실패했습니다.')
+    } finally {
+      setUpdatingDisplayName(false)
+    }
+  }
+
+  useEffect(() => {
+    if (groupId && showMembers) {
+      fetchMembers()
+    }
+  }, [groupId, showMembers])
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -209,6 +271,7 @@ export default function ChatRoomPage() {
         const response = await groupApi.sendChatMessage(groupId, roomId, { message: newMessage })
         if (response.success) {
           setNewMessage('')
+          setReplyingTo(null) // 답글 초기화
           // REST API로 전송한 경우 메시지 목록 새로고침
           setTimeout(() => {
             fetchMessages()
@@ -232,6 +295,7 @@ export default function ChatRoomPage() {
       if (success) {
         console.log('WebSocket으로 메시지 전송 성공')
         setNewMessage('')
+        setReplyingTo(null) // 답글 초기화
         stopTyping()
         if (typingTimeoutRef.current) {
           clearTimeout(typingTimeoutRef.current)
@@ -243,6 +307,7 @@ export default function ChatRoomPage() {
         const response = await groupApi.sendChatMessage(groupId, roomId, { message: newMessage })
         if (response.success) {
           setNewMessage('')
+          setReplyingTo(null) // 답글 초기화
           // REST API로 전송한 경우 메시지 목록 새로고침
           setTimeout(() => {
             fetchMessages()
@@ -292,12 +357,15 @@ export default function ChatRoomPage() {
   const handleMessageContextMenu = (e: React.MouseEvent, messageId: number) => {
     e.preventDefault()
     const message = messages.find(m => m.id === messageId)
-    if (!message || message.username !== currentUsername) return // 본인 메시지만
+    if (!message) return
+    
+    const isMyMessage = message.username === currentUsername
     
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
       messageId,
+      isMyMessage,
     })
   }
 
@@ -364,14 +432,33 @@ export default function ChatRoomPage() {
     }
   }
 
-  // 답글 기능 (향후 구현)
+  // 답글 기능
   const handleReplyMessage = (messageId: number) => {
     const message = messages.find(m => m.id === messageId)
     if (message) {
-      // 답글 기능은 향후 구현
-      setNewMessage(`@${message.nickname} `)
+      setReplyingTo(message)
+      setNewMessage(`@${message.displayName || message.nickname} `)
       closeContextMenu()
     }
+  }
+
+  // 답글 취소
+  const handleCancelReply = () => {
+    setReplyingTo(null)
+  }
+
+  // 메시지 반응 추가
+  const handleAddReaction = (messageId: number, emoji: string) => {
+    setMessageReactions(prev => {
+      const current = prev[messageId] || []
+      if (current.includes(emoji)) {
+        // 이미 있으면 제거
+        return { ...prev, [messageId]: current.filter(e => e !== emoji) }
+      } else {
+        // 없으면 추가
+        return { ...prev, [messageId]: [...current, emoji] }
+      }
+    })
   }
 
   const handleChatRoomClick = (selectedRoomId: number) => {
@@ -765,8 +852,55 @@ export default function ChatRoomPage() {
                             {currentRoom.description}
                           </p>
                         )}
+                        {/* 내 별명 설정 */}
+                        {isAuthenticated && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              내 별명 (이 채팅방에서만 표시)
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={myDisplayName}
+                                onChange={(e) => setMyDisplayName(e.target.value)}
+                                placeholder="별명을 입력하세요 (선택사항)"
+                                maxLength={30}
+                                className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                disabled={updatingDisplayName}
+                              />
+                              <button
+                                onClick={handleUpdateDisplayName}
+                                disabled={updatingDisplayName}
+                                className="px-3 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition disabled:opacity-50"
+                              >
+                                {updatingDisplayName ? '저장 중...' : '저장'}
+                              </button>
+                            </div>
+                            <p className="mt-1 text-xs text-gray-500">
+                              {myDisplayName.length}/30 (비워두면 기본 닉네임이 표시됩니다)
+                            </p>
+                          </div>
+                        )}
                       </>
                     )}
+                  </div>
+                  {/* 멤버 수 표시 및 멤버 목록 버튼 */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setShowMembers(!showMembers)
+                        if (!showMembers) {
+                          fetchMembers()
+                        }
+                      }}
+                      className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition flex items-center gap-1"
+                      title="멤버 목록"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <span>{group?.memberCount || 0}</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -813,7 +947,7 @@ export default function ChatRoomPage() {
                           <div className={`flex items-baseline gap-2 mb-1 ${isMyMessage ? 'flex-row-reverse' : ''}`}>
                             <div className="flex items-center gap-1">
                               <span className="font-semibold text-sm text-gray-800">
-                                {message.nickname}
+                                {message.displayName || message.nickname}
                               </span>
                               {message.isAdmin && (
                                 <svg
@@ -866,23 +1000,54 @@ export default function ChatRoomPage() {
                               </div>
                             ) : (
                               <>
-                                <div
-                                  className={`rounded-lg px-4 py-2 inline-block max-w-md relative ${
-                                    isMyMessage
-                                      ? 'bg-blue-500 text-white'
-                                      : 'bg-white text-gray-900 border border-gray-200'
-                                  }`}
-                                >
-                                  <p className="text-sm whitespace-pre-wrap break-words">
-                                    {message.message}
-                                  </p>
+                                <div className="flex flex-col gap-1">
+                                  <div
+                                    className={`rounded-lg px-4 py-2 inline-block max-w-md relative group ${
+                                      isMyMessage
+                                        ? 'bg-blue-500 text-white'
+                                        : 'bg-white text-gray-900 border border-gray-200'
+                                    }`}
+                                  >
+                                    <p className="text-sm whitespace-pre-wrap break-words">
+                                      {message.message}
+                                    </p>
+                                    {/* 반응 표시 */}
+                                    {messageReactions[message.id] && messageReactions[message.id].length > 0 && (
+                                      <div className="flex gap-1 mt-2 flex-wrap">
+                                        {Array.from(new Set(messageReactions[message.id])).map((emoji, idx) => (
+                                          <button
+                                            key={idx}
+                                            onClick={() => handleAddReaction(message.id, emoji)}
+                                            className="px-2 py-1 bg-black bg-opacity-20 rounded-full text-xs hover:bg-opacity-30 transition"
+                                          >
+                                            {emoji} {messageReactions[message.id].filter(e => e === emoji).length}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {/* 반응 추가 버튼 (호버 시) */}
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                                    <div className="flex gap-1">
+                                      {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
+                                        <button
+                                          key={emoji}
+                                          onClick={() => handleAddReaction(message.id, emoji)}
+                                          className="text-lg hover:scale-125 transition-transform px-1"
+                                          title={emoji}
+                                        >
+                                          {emoji}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  {/* 읽음 표시 - 메시지 박스 옆에 표시 */}
+                                  {isMyMessage && message.readCount !== undefined && message.readCount > 0 && (
+                                    <span className="text-xs text-gray-400 mb-1">
+                                      읽음 {message.readCount}
+                                    </span>
+                                  )}
                                 </div>
-                                {/* 읽음 표시 - 메시지 박스 옆에 표시 */}
-                                {isMyMessage && message.readCount !== undefined && message.readCount > 0 && (
-                                  <span className="text-xs text-gray-400 mb-1">
-                                    읽음 {message.readCount}
-                                  </span>
-                                )}
                               </>
                             )}
                           </div>
@@ -924,35 +1089,62 @@ export default function ChatRoomPage() {
                   }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <button
-                    onClick={() => handleStartEditMessage(contextMenu.messageId)}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    수정
-                  </button>
-                  <button
-                    onClick={() => handleReplyMessage(contextMenu.messageId)}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    답글
-                  </button>
-                  <button
-                    onClick={() => handleDeleteMessage(contextMenu.messageId)}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                  >
-                    삭제
-                  </button>
+                  {contextMenu.isMyMessage ? (
+                    <>
+                      <button
+                        onClick={() => handleStartEditMessage(contextMenu.messageId)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={() => handleReplyMessage(contextMenu.messageId)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        답글
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMessage(contextMenu.messageId)}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                      >
+                        삭제
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => handleReplyMessage(contextMenu.messageId)}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      답글
+                    </button>
+                  )}
                 </div>
               )}
 
               {/* 입력 영역 */}
               <form onSubmit={handleSendMessage} className="border-t border-gray-200 p-4 bg-white">
+                {/* 답글 표시 */}
+                {replyingTo && (
+                  <div className="mb-2 p-2 bg-gray-100 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-xs text-gray-500">답장:</span>
+                      <span className="text-xs text-gray-700 truncate">@{replyingTo.nickname}: {replyingTo.message}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCancelReply}
+                      className="text-gray-400 hover:text-gray-600 text-sm"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={newMessage}
                     onChange={handleInputChange}
-                    placeholder="메시지를 입력하세요..."
+                    placeholder={replyingTo ? `@${replyingTo.nickname}에게 답장...` : "메시지를 입력하세요..."}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     disabled={sending || !isAuthenticated || !isConnected}
                   />
@@ -980,6 +1172,70 @@ export default function ChatRoomPage() {
             </div>
           )}
         </div>
+
+        {/* 멤버 목록 사이드바 */}
+        {showMembers && (
+          <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800">멤버 ({members.length}명)</h3>
+              <button
+                onClick={() => setShowMembers(false)}
+                className="text-gray-400 hover:text-gray-600 transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {members.length === 0 ? (
+                <div className="text-center text-gray-500 text-sm">멤버가 없습니다.</div>
+              ) : (
+                <div className="space-y-2">
+                  {members.map((member) => (
+                    <div
+                      key={member.userId}
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition cursor-pointer"
+                      onClick={() => router.push(`/users/${member.username}`)}
+                    >
+                      <div className="flex-shrink-0">
+                        {member.profileImageUrl ? (
+                          <img
+                            src={member.profileImageUrl}
+                            alt={member.nickname}
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-sm font-semibold">
+                            {member.nickname.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-800 truncate">
+                            {member.nickname}
+                          </span>
+                          {member.isOwner && (
+                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                              주인
+                            </span>
+                          )}
+                          {member.isAdmin && !member.isOwner && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                              관리자
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">@{member.username}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {showLoginModal && (

@@ -331,6 +331,7 @@ public class GroupService {
                     .username(user.getUsername())
                     .nickname(user.getNickname())
                     .profileImageUrl(user.getProfileImageUrl())
+                    .displayName(member.getDisplayName())  // 채팅방별 별명
                     .isAdmin(member.isAdmin())
                     .isOwner(user.getId().equals(ownerId))
                     .build();
@@ -346,6 +347,7 @@ public class GroupService {
                     .username(owner.getUsername())
                     .nickname(owner.getNickname())
                     .profileImageUrl(owner.getProfileImageUrl())
+                    .displayName(null)  // 주인은 별명 없음 (또는 별도 처리)
                     .isAdmin(true) // 주인은 항상 관리자
                     .isOwner(true)
                     .build();
@@ -396,6 +398,39 @@ public class GroupService {
 
         GroupMember member = memberOpt.get();
         member.setAdmin(isAdmin);
+        groupMemberRepository.save(member);
+    }
+
+    /** 멤버 별명 변경 */
+    @Transactional
+    public void updateMemberDisplayName(Long groupId, Long userId, String displayName) {
+        Users currentUser = getCurrentUser();
+        if (currentUser == null) {
+            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        }
+
+        Group group = groupRepository.findByIdAndIsDeletedFalse(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
+
+        // 본인만 자신의 별명을 변경할 수 있음
+        if (!currentUser.getId().equals(userId)) {
+            throw new ApplicationUnauthorizedException("본인의 별명만 변경할 수 있습니다.");
+        }
+
+        // 모임 멤버인지 확인
+        Optional<GroupMember> memberOpt = groupMemberRepository.findByGroupIdAndUserId(groupId, userId);
+        if (memberOpt.isEmpty()) {
+            // 모임 주인인 경우 별도 처리
+            if (!group.getOwner().getId().equals(userId)) {
+                throw new ResourceNotFoundException("모임 멤버를 찾을 수 없습니다.");
+            }
+            // 모임 주인은 별명을 설정할 수 없거나 별도 처리 필요
+            // 여기서는 주인도 별명을 설정할 수 있도록 처리하지 않음
+            return;
+        }
+
+        GroupMember member = memberOpt.get();
+        member.setDisplayName(displayName != null && displayName.trim().isEmpty() ? null : displayName);
         groupMemberRepository.save(member);
     }
 
@@ -643,11 +678,19 @@ public class GroupService {
             Long userId = msg.getUser().getId();
             boolean isAdmin = finalAdminIds.contains(userId);
             
+            // 채팅방별 별명 조회
+            String displayName = null;
+            Optional<GroupMember> memberOpt = groupMemberRepository.findByGroupIdAndUserId(groupId, msg.getUser().getId());
+            if (memberOpt.isPresent()) {
+                displayName = memberOpt.get().getDisplayName();
+            }
+            
             return GroupChatMessageDTO.builder()
                     .id(msg.getId())
                     .message(msg.getMessage())
                     .username(msg.getUser().getUsername())
                     .nickname(msg.getUser().getNickname())
+                    .displayName(displayName)  // 채팅방별 별명
                     .profileImageUrl(msg.getUser().getProfileImageUrl())
                     .isAdmin(isAdmin)
                     .createdTime(msg.getCreatedTime())
