@@ -9,6 +9,7 @@ import PostCard from '@/components/PostCard'
 import { PostListSkeleton } from '@/components/SkeletonLoader'
 
 type SortType = 'RESENT' | 'HITS' | 'LIKES'
+type GroupFilterType = 'ALL' | 'GENERAL' | 'GROUP'
 
 function PostsListContent() {
   const router = useRouter()
@@ -19,6 +20,7 @@ function PostsListContent() {
   const [totalPages, setTotalPages] = useState(0)
   const [totalElements, setTotalElements] = useState(0)
   const [sortType, setSortType] = useState<SortType>('RESENT')
+  const [groupFilter, setGroupFilter] = useState<GroupFilterType>('ALL')
   const [tag, setTag] = useState<string | null>(null)
   const [searchKeyword, setSearchKeyword] = useState<string>('')
   const [searchInput, setSearchInput] = useState<string>('')
@@ -27,6 +29,7 @@ function PostsListContent() {
   useEffect(() => {
     const pageParam = searchParams.get('page')
     const sortParam = searchParams.get('sort') as SortType | null
+    const groupFilterParam = searchParams.get('groupFilter') as GroupFilterType | null
     const tagParam = searchParams.get('tag')
     const searchParam = searchParams.get('search')
     
@@ -36,6 +39,9 @@ function PostsListContent() {
     if (sortParam && (sortParam === 'RESENT' || sortParam === 'HITS' || sortParam === 'LIKES')) {
       setSortType(sortParam)
     }
+    if (groupFilterParam && (groupFilterParam === 'ALL' || groupFilterParam === 'GENERAL' || groupFilterParam === 'GROUP')) {
+      setGroupFilter(groupFilterParam)
+    }
     setTag(tagParam)
     setSearchKeyword(searchParam || '')
     setSearchInput(searchParam || '')
@@ -44,7 +50,7 @@ function PostsListContent() {
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await postApi.getPostList(page, 12, sortType, tag || undefined, searchKeyword || undefined)
+      const response = await postApi.getPostList(page, 12, sortType, tag || undefined, searchKeyword || undefined, groupFilter !== 'ALL' ? groupFilter : undefined)
       if (response.success && response.data) {
         setPosts(response.data.content || [])
         setTotalPages(response.data.totalPages || 0)
@@ -55,7 +61,7 @@ function PostsListContent() {
     } finally {
       setLoading(false)
     }
-  }, [page, sortType, tag, searchKeyword])
+  }, [page, sortType, tag, searchKeyword, groupFilter])
 
   useEffect(() => {
     fetchPosts()
@@ -66,15 +72,26 @@ function PostsListContent() {
     setPage(0) // 정렬 변경 시 첫 페이지로
     const tagParam = tag ? `&tag=${encodeURIComponent(tag)}` : ''
     const searchParam = searchKeyword ? `&search=${encodeURIComponent(searchKeyword)}` : ''
-    router.push(`/posts-list?page=1&sort=${newSortType}${tagParam}${searchParam}`)
-  }, [router, tag, searchKeyword])
+    const groupFilterParam = groupFilter !== 'ALL' ? `&groupFilter=${groupFilter}` : ''
+    router.push(`/posts-list?page=1&sort=${newSortType}${tagParam}${searchParam}${groupFilterParam}`)
+  }, [router, tag, searchKeyword, groupFilter])
+  
+  const handleGroupFilterChange = useCallback((newGroupFilter: GroupFilterType) => {
+    setGroupFilter(newGroupFilter)
+    setPage(0) // 필터 변경 시 첫 페이지로
+    const tagParam = tag ? `&tag=${encodeURIComponent(tag)}` : ''
+    const searchParam = searchKeyword ? `&search=${encodeURIComponent(searchKeyword)}` : ''
+    const groupFilterParam = newGroupFilter !== 'ALL' ? `&groupFilter=${newGroupFilter}` : ''
+    router.push(`/posts-list?page=1&sort=${sortType}${tagParam}${searchParam}${groupFilterParam}`)
+  }, [router, tag, searchKeyword, sortType])
 
   const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage)
     const tagParam = tag ? `&tag=${encodeURIComponent(tag)}` : ''
     const searchParam = searchKeyword ? `&search=${encodeURIComponent(searchKeyword)}` : ''
-    router.push(`/posts-list?page=${newPage + 1}&sort=${sortType}${tagParam}${searchParam}`)
-  }, [router, sortType, tag, searchKeyword])
+    const groupFilterParam = groupFilter !== 'ALL' ? `&groupFilter=${groupFilter}` : ''
+    router.push(`/posts-list?page=${newPage + 1}&sort=${sortType}${tagParam}${searchParam}${groupFilterParam}`)
+  }, [router, sortType, tag, searchKeyword, groupFilter])
 
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault()
@@ -82,15 +99,17 @@ function PostsListContent() {
     const searchValue = searchInput.trim()
     const tagParam = tag ? `&tag=${encodeURIComponent(tag)}` : ''
     const searchParam = searchValue ? `&search=${encodeURIComponent(searchValue)}` : ''
-    router.push(`/posts-list?page=1&sort=${sortType}${tagParam}${searchParam}`)
-  }, [router, sortType, tag, searchInput])
+    const groupFilterParam = groupFilter !== 'ALL' ? `&groupFilter=${groupFilter}` : ''
+    router.push(`/posts-list?page=1&sort=${sortType}${tagParam}${searchParam}${groupFilterParam}`)
+  }, [router, sortType, tag, searchInput, groupFilter])
 
   const handleClearSearch = useCallback(() => {
     setSearchInput('')
     setPage(0)
     const tagParam = tag ? `&tag=${encodeURIComponent(tag)}` : ''
-    router.push(`/posts-list?page=1&sort=${sortType}${tagParam}`)
-  }, [router, sortType, tag])
+    const groupFilterParam = groupFilter !== 'ALL' ? `&groupFilter=${groupFilter}` : ''
+    router.push(`/posts-list?page=1&sort=${sortType}${tagParam}${groupFilterParam}`)
+  }, [router, sortType, tag, groupFilter])
 
   return (
     <div className="min-h-screen bg-white">
@@ -145,38 +164,74 @@ function PostsListContent() {
           </form>
 
           {/* 필터 - 오른쪽 배치 */}
-          <div className="flex items-center space-x-4">
-            <span className="text-sm font-medium text-gray-700">정렬:</span>
-            <button
-              onClick={() => handleSortChange('RESENT')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                sortType === 'RESENT'
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              최신순
-            </button>
-            <button
-              onClick={() => handleSortChange('HITS')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                sortType === 'HITS'
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              조회수순
-            </button>
-            <button
-              onClick={() => handleSortChange('LIKES')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                sortType === 'LIKES'
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              좋아요순
-            </button>
+          <div className="flex items-center space-x-4 flex-wrap gap-4">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium text-gray-700">정렬:</span>
+              <button
+                onClick={() => handleSortChange('RESENT')}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  sortType === 'RESENT'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                최신순
+              </button>
+              <button
+                onClick={() => handleSortChange('HITS')}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  sortType === 'HITS'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                조회수순
+              </button>
+              <button
+                onClick={() => handleSortChange('LIKES')}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  sortType === 'LIKES'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                좋아요순
+              </button>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium text-gray-700">유형:</span>
+              <button
+                onClick={() => handleGroupFilterChange('ALL')}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  groupFilter === 'ALL'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                전체
+              </button>
+              <button
+                onClick={() => handleGroupFilterChange('GENERAL')}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  groupFilter === 'GENERAL'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                일반 게시글
+              </button>
+              <button
+                onClick={() => handleGroupFilterChange('GROUP')}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  groupFilter === 'GROUP'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                모임 게시글
+              </button>
+            </div>
           </div>
         </div>
 

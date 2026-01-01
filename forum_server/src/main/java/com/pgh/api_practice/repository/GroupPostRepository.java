@@ -18,6 +18,10 @@ public interface GroupPostRepository extends JpaRepository<GroupPost, Long> {
     @Query("SELECT gp FROM GroupPost gp WHERE gp.group.id = :groupId AND gp.isDeleted = false AND gp.isPublic = :isPublic ORDER BY gp.createdTime DESC")
     Page<GroupPost> findByGroupIdAndIsPublicAndIsDeletedFalseOrderByCreatedTimeDesc(@Param("groupId") Long groupId, @Param("isPublic") boolean isPublic, Pageable pageable);
     
+    // 외부 공개 게시글만 조회 (전체 모임)
+    @Query("SELECT gp FROM GroupPost gp WHERE gp.isDeleted = false AND gp.isPublic = true ORDER BY gp.createdTime DESC")
+    Page<GroupPost> findByIsPublicAndIsDeletedFalseOrderByCreatedTimeDesc(Pageable pageable);
+    
     @Modifying
     @Query("UPDATE GroupPost gp SET gp.views = gp.views + 1 WHERE gp.id = :id")
     void incrementViews(@Param("id") Long id);

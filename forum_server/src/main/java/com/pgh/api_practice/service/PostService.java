@@ -197,10 +197,13 @@ public class PostService {
 
     /** ✅ 전체 게시글 목록 */
     @Transactional(readOnly = true)
-    public Page<PostListDTO> getPostList(Pageable pageable, String sortType) {
+    public Page<PostListDTO> getPostList(Pageable pageable, String sortType, String groupFilter) {
+        // groupFilter: ALL(전체), GENERAL(일반 게시글만), GROUP(모임 게시글만)
+        boolean filterGeneralOnly = "GENERAL".equalsIgnoreCase(groupFilter);
+        boolean filterGroupOnly = "GROUP".equalsIgnoreCase(groupFilter);
+        
+        // 1. posts 테이블에서 일반 게시글과 외부 공개 모임 게시글 조회
         Page<Post> posts;
-
-        // 일반 게시글과 모임 외부 노출 게시글만 조회
         if ("RESENT".equalsIgnoreCase(sortType)) {
             posts = postRepository.findAllPublicPostsOrderByCreatedTimeDesc(pageable);
         } else if ("HITS".equalsIgnoreCase(sortType)) {
@@ -211,16 +214,38 @@ public class PostService {
             posts = postRepository.findAllPublicPostsOrderByCreatedTimeDesc(pageable);
         }
 
-        return posts.map(post -> {
-            // updateDateTime이 null이거나 유효하지 않은 경우 createDateTime으로 설정
+        // 2. group_posts 테이블에서 외부 공개 게시글 조회 (필터링 필요 시)
+        Page<GroupPost> publicGroupPosts = null;
+        if (!filterGeneralOnly) {
+            publicGroupPosts = groupPostRepository.findByIsPublicAndIsDeletedFalseOrderByCreatedTimeDesc(Pageable.unpaged());
+        }
+        
+        // 3. 두 결과를 합쳐서 PostListDTO로 변환
+        List<PostListDTO> allPosts = new ArrayList<>();
+        
+        // posts 테이블의 게시글 변환
+        posts.getContent().forEach(post -> {
+            // 필터링: 일반 게시글만 필터링하는 경우 모임 게시글 제외
+            if (filterGeneralOnly && post.getGroup() != null) {
+                return; // 모임 게시글은 제외
+            }
+            // 필터링: 모임 게시글만 필터링하는 경우 일반 게시글 제외
+            if (filterGroupOnly && post.getGroup() == null) {
+                return; // 일반 게시글은 제외
+            }
+            
             LocalDateTime updateTime = post.getUpdatedTime();
             if (updateTime == null || updateTime.isBefore(post.getCreatedTime()) || 
                 updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
                 updateTime = post.getCreatedTime();
             }
             
-            // 좋아요 수 조회
             long likeCount = postLikeRepository.countByPostId(post.getId());
+            
+            // 태그 조회
+            List<String> tags = postTagRepository.findByPostId(post.getId()).stream()
+                    .map(pt -> pt.getTag().getName())
+                    .collect(Collectors.toList());
             
             PostListDTO.PostListDTOBuilder builder = PostListDTO.builder()
                     .id(post.getId())
@@ -230,7 +255,8 @@ public class PostService {
                     .createDateTime(post.getCreatedTime())
                     .updateDateTime(updateTime)
                     .profileImageUrl(post.getProfileImageUrl())
-                    .likeCount(likeCount);
+                    .likeCount(likeCount)
+                    .tags(tags);
             
             // 모임 정보 추가
             if (post.getGroup() != null) {
@@ -239,8 +265,55 @@ public class PostService {
                        .isPublic(post.isPublic());
             }
             
-            return builder.build();
+            allPosts.add(builder.build());
         });
+        
+        // group_posts 테이블의 외부 공개 게시글 변환 (모임 게시글만 필터링하거나 전체인 경우만)
+        if (publicGroupPosts != null && !filterGeneralOnly) {
+            publicGroupPosts.getContent().forEach(groupPost -> {
+                LocalDateTime updateTime = groupPost.getUpdatedTime();
+                if (updateTime == null || updateTime.isBefore(groupPost.getCreatedTime()) || 
+                    updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
+                    updateTime = groupPost.getCreatedTime();
+                }
+                
+                long likeCount = postLikeRepository.countByGroupPostId(groupPost.getId());
+                
+                PostListDTO dto = PostListDTO.builder()
+                        .id(groupPost.getId())
+                        .title(groupPost.getTitle())
+                        .username(groupPost.getUser().getUsername())
+                        .views(groupPost.getViews())
+                        .createDateTime(groupPost.getCreatedTime())
+                        .updateDateTime(updateTime)
+                        .profileImageUrl(groupPost.getProfileImageUrl())
+                        .likeCount(likeCount)
+                        .tags(new ArrayList<>()) // GroupPost는 태그가 없을 수 있음
+                        .groupId(groupPost.getGroup().getId())
+                        .groupName(groupPost.getGroup().getName())
+                        .isPublic(groupPost.isPublic())
+                        .build();
+                
+                allPosts.add(dto);
+            });
+        }
+        
+        // 정렬 (sortType에 따라)
+        if ("HITS".equalsIgnoreCase(sortType)) {
+            allPosts.sort((a, b) -> Integer.compare(b.getViews(), a.getViews()));
+        } else if ("LIKES".equalsIgnoreCase(sortType)) {
+            allPosts.sort((a, b) -> Long.compare(b.getLikeCount(), a.getLikeCount()));
+        } else {
+            // RESENT 또는 기본값: 최신순
+            allPosts.sort((a, b) -> b.getCreateDateTime().compareTo(a.getCreateDateTime()));
+        }
+        
+        // 페이지네이션 적용
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), allPosts.size());
+        List<PostListDTO> pagedPosts = allPosts.subList(start, end);
+        
+        return new PageImpl<>(pagedPosts, pageable, allPosts.size());
     }
 
     /** ✅ 내 게시글 목록 */
@@ -300,7 +373,10 @@ public class PostService {
     
     /** ✅ 태그로 게시글 목록 조회 */
     @Transactional(readOnly = true)
-    public Page<PostListDTO> getPostListByTag(Pageable pageable, String tagName, String sortType) {
+    public Page<PostListDTO> getPostListByTag(Pageable pageable, String tagName, String sortType, String groupFilter) {
+        boolean filterGeneralOnly = "GENERAL".equalsIgnoreCase(groupFilter);
+        boolean filterGroupOnly = "GROUP".equalsIgnoreCase(groupFilter);
+        
         List<Long> postIds = postTagRepository.findPostIdsByTagName(tagName);
         
         if (postIds.isEmpty()) {
@@ -319,31 +395,71 @@ public class PostService {
             posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, pageable);
         }
         
-        return posts.map(post -> {
-            LocalDateTime updateTime = post.getUpdatedTime();
-            if (updateTime == null || updateTime.isBefore(post.getCreatedTime()) || 
-                updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
-                updateTime = post.getCreatedTime();
-            }
-            
-            long likeCount = postLikeRepository.countByPostId(post.getId());
-            
-            List<String> tags = postTagRepository.findByPostId(post.getId()).stream()
-                    .map(pt -> pt.getTag().getName())
-                    .collect(Collectors.toList());
-            
-            return PostListDTO.builder()
-                    .id(post.getId())
-                    .title(post.getTitle())
-                    .username(post.getUser().getUsername())
-                    .views(post.getViews())
-                    .createDateTime(post.getCreatedTime())
-                    .updateDateTime(updateTime)
-                    .profileImageUrl(post.getProfileImageUrl())
-                    .likeCount(likeCount)
-                    .tags(tags)
-                    .build();
-        });
+        List<PostListDTO> filteredPosts = posts.getContent().stream()
+                .filter(post -> {
+                    // 필터링: 일반 게시글만 필터링하는 경우 모임 게시글 제외
+                    if (filterGeneralOnly && post.getGroup() != null) {
+                        return false;
+                    }
+                    // 필터링: 모임 게시글만 필터링하는 경우 일반 게시글 제외
+                    if (filterGroupOnly && post.getGroup() == null) {
+                        return false;
+                    }
+                    // 외부 공개 게시글만 포함 (모임 게시글인 경우)
+                    if (post.getGroup() != null && !post.isPublic()) {
+                        return false;
+                    }
+                    return true;
+                })
+                .map(post -> {
+                    LocalDateTime updateTime = post.getUpdatedTime();
+                    if (updateTime == null || updateTime.isBefore(post.getCreatedTime()) || 
+                        updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
+                        updateTime = post.getCreatedTime();
+                    }
+                    
+                    long likeCount = postLikeRepository.countByPostId(post.getId());
+                    
+                    List<String> tags = postTagRepository.findByPostId(post.getId()).stream()
+                            .map(pt -> pt.getTag().getName())
+                            .collect(Collectors.toList());
+                    
+                    PostListDTO.PostListDTOBuilder builder = PostListDTO.builder()
+                            .id(post.getId())
+                            .title(post.getTitle())
+                            .username(post.getUser().getUsername())
+                            .views(post.getViews())
+                            .createDateTime(post.getCreatedTime())
+                            .updateDateTime(updateTime)
+                            .profileImageUrl(post.getProfileImageUrl())
+                            .likeCount(likeCount)
+                            .tags(tags);
+                    
+                    if (post.getGroup() != null) {
+                        builder.groupId(post.getGroup().getId())
+                               .groupName(post.getGroup().getName())
+                               .isPublic(post.isPublic());
+                    }
+                    
+                    return builder.build();
+                })
+                .collect(Collectors.toList());
+        
+        // 정렬
+        if ("HITS".equalsIgnoreCase(sortType)) {
+            filteredPosts.sort((a, b) -> Integer.compare(b.getViews(), a.getViews()));
+        } else if ("LIKES".equalsIgnoreCase(sortType)) {
+            filteredPosts.sort((a, b) -> Long.compare(b.getLikeCount(), a.getLikeCount()));
+        } else {
+            filteredPosts.sort((a, b) -> b.getCreateDateTime().compareTo(a.getCreateDateTime()));
+        }
+        
+        // 페이지네이션 적용
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filteredPosts.size());
+        List<PostListDTO> pagedPosts = filteredPosts.subList(start, end);
+        
+        return new PageImpl<>(pagedPosts, pageable, filteredPosts.size());
     }
     
     /** ✅ 내 게시글 목록 - 태그 필터 */
@@ -620,11 +736,14 @@ public class PostService {
     
     /** ✅ 게시글 검색 */
     @Transactional(readOnly = true)
-    public Page<PostListDTO> searchPosts(Pageable pageable, String keyword, String sortType) {
+    public Page<PostListDTO> searchPosts(Pageable pageable, String keyword, String sortType, String groupFilter) {
         if (keyword == null || keyword.trim().isEmpty()) {
             // 검색어가 없으면 일반 목록 반환
-            return getPostList(pageable, sortType);
+            return getPostList(pageable, sortType, groupFilter);
         }
+        
+        boolean filterGeneralOnly = "GENERAL".equalsIgnoreCase(groupFilter);
+        boolean filterGroupOnly = "GROUP".equalsIgnoreCase(groupFilter);
         
         String searchKeyword = keyword.trim();
         Page<Post> posts;
@@ -639,39 +758,68 @@ public class PostService {
             posts = postRepository.searchPostsByKeyword(searchKeyword, pageable);
         }
         
-        return posts.map(post -> {
-            LocalDateTime updateTime = post.getUpdatedTime();
-            if (updateTime == null || updateTime.isBefore(post.getCreatedTime()) || 
-                updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
-                updateTime = post.getCreatedTime();
-            }
-            
-            long likeCount = postLikeRepository.countByPostId(post.getId());
-            
-            List<String> tags = postTagRepository.findByPostId(post.getId()).stream()
-                    .map(pt -> pt.getTag().getName())
-                    .collect(Collectors.toList());
-            
-            PostListDTO.PostListDTOBuilder builder = PostListDTO.builder()
-                    .id(post.getId())
-                    .title(post.getTitle())
-                    .username(post.getUser().getUsername())
-                    .views(post.getViews())
-                    .createDateTime(post.getCreatedTime())
-                    .updateDateTime(updateTime)
-                    .profileImageUrl(post.getProfileImageUrl())
-                    .likeCount(likeCount)
-                    .tags(tags);
-            
-            // 모임 정보 추가
-            if (post.getGroup() != null) {
-                builder.groupId(post.getGroup().getId())
-                       .groupName(post.getGroup().getName())
-                       .isPublic(post.isPublic());
-            }
-            
-            return builder.build();
-        });
+        List<PostListDTO> filteredPosts = posts.getContent().stream()
+                .filter(post -> {
+                    // 필터링: 일반 게시글만 필터링하는 경우 모임 게시글 제외
+                    if (filterGeneralOnly && post.getGroup() != null) {
+                        return false;
+                    }
+                    // 필터링: 모임 게시글만 필터링하는 경우 일반 게시글 제외
+                    if (filterGroupOnly && post.getGroup() == null) {
+                        return false;
+                    }
+                    return true;
+                })
+                .map(post -> {
+                    LocalDateTime updateTime = post.getUpdatedTime();
+                    if (updateTime == null || updateTime.isBefore(post.getCreatedTime()) || 
+                        updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
+                        updateTime = post.getCreatedTime();
+                    }
+                    
+                    long likeCount = postLikeRepository.countByPostId(post.getId());
+                    
+                    List<String> tags = postTagRepository.findByPostId(post.getId()).stream()
+                            .map(pt -> pt.getTag().getName())
+                            .collect(Collectors.toList());
+                    
+                    PostListDTO.PostListDTOBuilder builder = PostListDTO.builder()
+                            .id(post.getId())
+                            .title(post.getTitle())
+                            .username(post.getUser().getUsername())
+                            .views(post.getViews())
+                            .createDateTime(post.getCreatedTime())
+                            .updateDateTime(updateTime)
+                            .profileImageUrl(post.getProfileImageUrl())
+                            .likeCount(likeCount)
+                            .tags(tags);
+                    
+                    // 모임 정보 추가
+                    if (post.getGroup() != null) {
+                        builder.groupId(post.getGroup().getId())
+                               .groupName(post.getGroup().getName())
+                               .isPublic(post.isPublic());
+                    }
+                    
+                    return builder.build();
+                })
+                .collect(Collectors.toList());
+        
+        // 정렬
+        if ("HITS".equalsIgnoreCase(sortType)) {
+            filteredPosts.sort((a, b) -> Integer.compare(b.getViews(), a.getViews()));
+        } else if ("LIKES".equalsIgnoreCase(sortType)) {
+            filteredPosts.sort((a, b) -> Long.compare(b.getLikeCount(), a.getLikeCount()));
+        } else {
+            filteredPosts.sort((a, b) -> b.getCreateDateTime().compareTo(a.getCreateDateTime()));
+        }
+        
+        // 페이지네이션 적용
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filteredPosts.size());
+        List<PostListDTO> pagedPosts = filteredPosts.subList(start, end);
+        
+        return new PageImpl<>(pagedPosts, pageable, filteredPosts.size());
     }
     
     /** ✅ 모임별 게시글 목록 조회 */
